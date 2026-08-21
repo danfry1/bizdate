@@ -175,7 +175,10 @@ function buildYear(calendar: RuleCalendar, year: number): ReadonlyMap<number, st
       let base: number
       switch (rule.kind) {
         case 'fixed':
-          base = daysFromCivil(y, rule.month, Math.min(rule.day, daysInMonth(y, rule.month)))
+          // A 29 February rule simply does not occur in a common year. Clamping
+          // it onto the 28th would invent a holiday the rule never described.
+          if (rule.day > daysInMonth(y, rule.month)) continue
+          base = daysFromCivil(y, rule.month, rule.day)
           break
         case 'nth-weekday':
           base = nthWeekdayEpochDay(rule, y)
@@ -301,9 +304,57 @@ export function holidayName(date: DateInput, calendar: Calendar): string | undef
   return holidayMap(calendar, year).get(epochDay)
 }
 
+/** Longest a month can ever be, so a rule for 29 February is allowed but 31 February is not. */
+const LONGEST_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] as const
+
+function validateRule(rule: HolidayRule, index: number): void {
+  const where = `rules[${String(index)}]`
+  switch (rule.kind) {
+    case 'fixed': {
+      if (!Number.isInteger(rule.month) || rule.month < 1 || rule.month > 12)
+        throw new InvalidArgumentError(`${where}.month`, 'must be a whole number from 1 to 12')
+      const longest = LONGEST_MONTH[rule.month - 1] ?? 31
+      if (!Number.isInteger(rule.day) || rule.day < 1 || rule.day > longest)
+        throw new InvalidArgumentError(
+          `${where}.day`,
+          `must be a whole number from 1 to ${String(longest)} for month ${String(rule.month)}`,
+        )
+      return
+    }
+    case 'nth-weekday':
+      if (!Number.isInteger(rule.month) || rule.month < 1 || rule.month > 12)
+        throw new InvalidArgumentError(`${where}.month`, 'must be a whole number from 1 to 12')
+      if (!Number.isInteger(rule.weekday) || rule.weekday < 1 || rule.weekday > 7)
+        throw new InvalidArgumentError(
+          `${where}.weekday`,
+          'must be an ISO weekday from 1 (Monday) to 7 (Sunday)',
+        )
+      if (![1, 2, 3, 4, -1].includes(rule.nth))
+        throw new InvalidArgumentError(`${where}.nth`, 'must be 1, 2, 3, 4 or -1 for the last')
+      return
+    case 'easter':
+      if (!Number.isInteger(rule.offset) || Math.abs(rule.offset) > 366)
+        throw new InvalidArgumentError(
+          `${where}.offset`,
+          'must be a whole number of days within a year of Easter Sunday',
+        )
+      return
+    case 'one-off':
+      // Throws DateParseError if the date is not a real calendar date.
+      epochDayOf(rule.date)
+      return
+    default:
+      return assertNever(rule)
+  }
+}
+
 /**
  * Builds a calendar from your own rules — a company's closure days, a market
  * this package does not ship, or a national calendar with local additions.
+ *
+ * Rules are validated here: a rule for 31 February, an nth of 7, or a closure
+ * date that is not a real date is refused rather than quietly shifted onto some
+ * nearby day.
  */
 export function customCalendar(definition: {
   readonly id: string
@@ -323,12 +374,14 @@ export function customCalendar(definition: {
     name: date,
     date,
   }))
+  const rules = [...(definition.rules ?? []), ...dateRules]
+  rules.forEach(validateRule)
   return Object.freeze({
     kind: 'rules',
     id: definition.id,
     name: definition.name ?? definition.id,
     weekend: Object.freeze([...(definition.weekend ?? [6, 7])]),
-    rules: Object.freeze([...(definition.rules ?? []), ...dateRules]),
+    rules: Object.freeze(rules),
     validFrom: definition.validFrom,
     validThrough: definition.validThrough,
   })

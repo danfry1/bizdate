@@ -116,6 +116,15 @@ type CommonAmortizationOptions = {
   readonly paymentRounding?: Rounding
   /** Overrides the computed level payment — for a lender who quotes a rounded instalment. */
   readonly payment?: bigint
+  /**
+   * Allows the final payment to be larger than the regular one.
+   *
+   * A level-payment loan is supposed to be repaid by its instalments, so a
+   * `payment` you supply that is too small to do that is refused. Set this when
+   * the balloon is the product — a five-year loan amortised on a thirty-year
+   * instalment, say — and the final row will settle whatever is left.
+   */
+  readonly balloon?: boolean
 }
 
 /** How to amortize: either by counting periods, or by walking a real schedule of dates. */
@@ -154,6 +163,43 @@ function periodRates(options: AmortizationOptions): readonly Fraction[] {
       exactDayCountFraction(period.start, period.end, options.convention, options.dayCount ?? {}),
     ),
   )
+}
+
+/**
+ * The level payment for periods whose rates differ, as an unreduced ratio.
+ *
+ * When each period charges its own rate — which is what real dates produce, a
+ * 92-day quarter costing more than an 89-day one — the constant-rate annuity
+ * formula does not apply. The payment is the one that discounts to the
+ * principal across the actual periods: `P = sum of pmt / prod(1 + i_j)`, solved
+ * exactly. Writing each `1 + i_j` as `a_j / b_j` turns the sum into integer
+ * arithmetic with a single common denominator.
+ */
+function variableLevelPaymentRatio(
+  principal: bigint,
+  rates: readonly Fraction[],
+): { readonly numerator: bigint; readonly denominator: bigint } {
+  const growthNumerators: bigint[] = []
+  const growthDenominators: bigint[] = []
+  let numeratorProduct = 1n
+  let denominatorProduct = 1n
+  for (const rate of rates) {
+    numeratorProduct *= rate.denominator + rate.numerator
+    denominatorProduct *= rate.denominator
+    growthNumerators.push(numeratorProduct)
+    growthDenominators.push(denominatorProduct)
+  }
+  const total = numeratorProduct
+  let discountSum = 0n
+  for (let index = 0; index < rates.length; index += 1) {
+    const prefixNumerator = growthNumerators[index] ?? 1n
+    const prefixDenominator = growthDenominators[index] ?? 1n
+    // total / prefixNumerator is exact: the prefix divides the whole product.
+    discountSum += prefixDenominator * (total / prefixNumerator)
+  }
+  if (discountSum === 0n)
+    throw new InvalidArgumentError('annualRate', 'produces a payment that cannot be computed')
+  return { numerator: principal * total, denominator: discountSum }
 }
 
 /**
@@ -209,8 +255,20 @@ export function exactLevelPayment(
  *
  * A computed instalment is raised to the smallest amount that repays the loan
  * if rounding would otherwise leave it unable to cover the interest, which can
- * happen for a very small loan over very many periods. An instalment you supply
- * yourself is never adjusted: if it cannot repay the loan, that is an error.
+ * happen for a very small loan over very many periods.
+ *
+ * Every payment but the last is exactly the quoted instalment, and the schedule
+ * ends when the balance does — a rounded-up instalment can repay a small loan
+ * before its final period. The last row carries whatever rounding left behind, which is usually a few minor units;
+ * where an instalment barely exceeds the interest — a long schedule at a high
+ * rate — each period's rounding compounds into the next, and the last row can
+ * differ from the rest by materially more. That is inherent to repaying a loan
+ * in whole minor units, not a defect: the balance still reaches exactly zero and
+ * the rows still sum exactly to the principal.
+ *
+ * An instalment you supply yourself is never adjusted, and is checked: if it
+ * leaves more outstanding at maturity than a regular payment, that is an error
+ * unless you asked for a balloon.
  */
 export function amortize(options: AmortizationOptions): Amortization {
   if (typeof options.principal !== 'bigint')
@@ -222,19 +280,17 @@ export function amortize(options: AmortizationOptions): Amortization {
   const count = rates.length
   const dates = options.kind === 'dated' ? options.schedule.periods : undefined
 
+  const uniformRate = rates.every(
+    (rate) =>
+      rate.numerator === (rates[0]?.numerator ?? 0n) &&
+      rate.denominator === (rates[0]?.denominator ?? 1n),
+  )
   const computedPayment =
     method === 'level-payment'
       ? roundPaymentRatio(
-          levelPaymentRatio(
-            options.principal,
-            options.kind === 'periodic'
-              ? divide(
-                  toFraction(options.annualRate, 'annualRate'),
-                  fromInteger(options.periodsPerYear),
-                )
-              : averageRate(rates),
-            count,
-          ),
+          uniformRate
+            ? levelPaymentRatio(options.principal, rates[0] ?? ZERO, count)
+            : variableLevelPaymentRatio(options.principal, rates),
           options.paymentRounding ?? 'ceiling',
         )
       : 0n
@@ -297,7 +353,26 @@ export function amortize(options: AmortizationOptions): Amortization {
         ? {}
         : { start: dated.start, end: dated.end, paymentDate: dated.paymentDate }),
     })
+    // A loan repaid early has no further payments to make. Rounding an
+    // instalment up can settle a small balance before the last period, and
+    // empty rows would misdescribe the schedule.
+    if (balance === 0n) break
   }
+
+  const finalPayment = periods[periods.length - 1]?.payment ?? 0n
+  // Only an instalment supplied by the caller is checked. A computed one is the
+  // exact annuity for these periods, and its final row differs from the regular
+  // payment only by the rounding that accumulated along the way.
+  if (
+    method === 'level-payment' &&
+    options.payment !== undefined &&
+    options.balloon !== true &&
+    finalPayment > levelPayment
+  )
+    throw new InvalidArgumentError(
+      'payment',
+      `a payment of ${levelPayment.toString()} leaves ${finalPayment.toString()} outstanding at the end, so the loan is not repaid by its instalments. Raise the payment, add periods, or pass balloon: true if the final lump sum is intended.`,
+    )
 
   return Object.freeze({
     periods: Object.freeze(periods),
@@ -311,9 +386,3 @@ const roundPaymentRatio = (
   ratio: { readonly numerator: bigint; readonly denominator: bigint },
   mode: Rounding,
 ): bigint => roundRatio(ratio.numerator, ratio.denominator, mode)
-
-/** Mean period rate across a dated schedule, used to size the level payment. */
-function averageRate(rates: readonly Fraction[]): Fraction {
-  const total = rates.reduce((sum, rate) => add(sum, rate), ZERO)
-  return divide(total, fromInteger(rates.length))
-}

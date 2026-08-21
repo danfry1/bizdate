@@ -7,6 +7,7 @@ import dayCountFixture from './fixtures/quantlib-daycount.json' with { type: 'js
 import icmaFixture from './fixtures/quantlib-icma.json' with { type: 'json' }
 
 type DayCountFixture = {
+  readonly quantlib: string
   readonly cases: readonly {
     readonly start: string
     readonly end: string
@@ -15,6 +16,7 @@ type DayCountFixture = {
 }
 
 type IcmaFixture = {
+  readonly quantlib: string
   readonly cases: readonly {
     readonly start: string
     readonly end: string
@@ -36,6 +38,14 @@ const closeEnough = (ours: number, theirs: number): boolean =>
   ours === theirs || Math.abs(ours - theirs) <= RELATIVE_TOLERANCE * Math.max(1, Math.abs(theirs))
 
 describe('day count conventions against QuantLib', () => {
+  it('compares against the pinned reference version', () => {
+    expect([dayCounts.quantlib, bus252.quantlib, icma.quantlib]).toStrictEqual([
+      '1.43',
+      '1.43',
+      '1.43',
+    ])
+  })
+
   const conventions = Object.keys(dayCounts.cases[0]?.results ?? {}) as DayCountConvention[]
 
   for (const convention of conventions) {

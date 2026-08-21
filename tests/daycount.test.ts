@@ -136,6 +136,19 @@ describe('conventions that need extra inputs', () => {
     ).toBe(0.5)
   })
 
+  it.each(['weekly', 'four-weekly', 'fortnightly', 'daily', 'term'] as const)(
+    'refuses ACT/ACT ICMA for a %s coupon, which is not a whole number of months',
+    (frequency) => {
+      expect(() =>
+        dayCountFraction('2026-01-01', '2026-01-08', 'ACT/ACT ICMA', {
+          frequency,
+          referenceStart: '2026-01-01',
+          referenceEnd: '2026-01-08',
+        }),
+      ).toThrow(/defined for coupon periods of whole months/)
+    },
+  )
+
   it('works on a TARGET calendar as readily as a US one', () => {
     // Good Friday and Easter Monday close TARGET in that window.
     expect(dayCountDays('2026-04-01', '2026-04-10', 'BUS/252', { calendar: target })).toBe(5)

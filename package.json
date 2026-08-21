@@ -1,6 +1,6 @@
 {
   "name": "bizdate",
-  "version": "0.1.0",
+  "version": "0.1.0-beta.1",
   "description": "Zero-dependency business-day, market-calendar and day-count math for TypeScript: ISDA/ICMA day count conventions as exact fractions, rule-based exchange calendars (NYSE, SIFMA, TARGET2, LSE), roll conventions, payment schedules, and exact integer-minor-unit accrual & amortization",
   "type": "module",
   "sideEffects": false,

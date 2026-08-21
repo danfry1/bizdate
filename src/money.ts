@@ -1,5 +1,18 @@
 import { InvalidArgumentError } from './errors.js'
-import type { Fraction } from './rational.js'
+import { type Fraction, fromInteger, toFraction } from './rational.js'
+
+const greatestCommonDivisor = (a: bigint, b: bigint): bigint => {
+  let x = a < 0n ? -a : a
+  let y = b < 0n ? -b : b
+  while (y !== 0n) {
+    const remainder = x % y
+    x = y
+    y = remainder
+  }
+  return x
+}
+
+const lowestCommonMultiple = (a: bigint, b: bigint): bigint => (a / greatestCommonDivisor(a, b)) * b
 
 /**
  * How an exact amount is turned into whole minor units.
@@ -105,12 +118,25 @@ export function roundRatio(
  */
 export function allocate(amount: bigint, weights: readonly (number | bigint)[]): readonly bigint[] {
   if (weights.length === 0) throw new InvalidArgumentError('weights', 'must not be empty')
-  const asBigints = weights.map((weight, index) => {
-    const value = typeof weight === 'bigint' ? weight : BigInt(Math.round(weight * 1_000_000))
-    if (value < 0n)
+  // Fractional weights are taken exactly: a weight of 1e-9 earns no whole unit
+  // but is not quantised away either, and 1/3 keeps every digit it was written
+  // with.
+  const exact = weights.map((weight, index) => {
+    const value =
+      typeof weight === 'bigint'
+        ? fromInteger(weight)
+        : toFraction(weight, `weights[${String(index)}]`)
+    if (value.numerator < 0n)
       throw new InvalidArgumentError(`weights[${String(index)}]`, 'must not be negative')
     return value
   })
+  const commonDenominator = exact.reduce(
+    (denominator, weight) => lowestCommonMultiple(denominator, weight.denominator),
+    1n,
+  )
+  const asBigints = exact.map(
+    (weight) => weight.numerator * (commonDenominator / weight.denominator),
+  )
   const total = asBigints.reduce((sum, weight) => sum + weight, 0n)
   if (total === 0n) throw new InvalidArgumentError('weights', 'must not all be zero')
 

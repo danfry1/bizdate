@@ -150,7 +150,14 @@ describe('amortize', () => {
     // 90 days at 6% on 100,000.00 = 1,479.45
     expect(loan.periods[0]?.interest).toBe(1_479_45n)
     // The last period is shorter, so it charges less interest than the first.
-    expect(loan.periods[3]?.interest).toBe(382_28n)
+    expect(loan.periods[3]?.interest).toBe(382_33n)
+    // Real periods differ in length, so the instalment is the exact annuity for
+    // these dates: every payment is the same and the last one differs only by
+    // accumulated rounding.
+    expect(new Set(loan.periods.slice(0, 3).map((period) => period.payment)).size).toBe(1)
+    expect(
+      Math.abs(Number((loan.periods[3]?.payment ?? 0n) - (loan.periods[0]?.payment ?? 0n))),
+    ).toBeLessThan(10)
     expect(loan.periods[3]?.balance).toBe(0n)
     expect(loan.periods.reduce((sum, period) => sum + period.principal, 0n)).toBe(100_000_00n)
   })
@@ -194,6 +201,24 @@ describe('amortize rounding of the instalment', () => {
     expect(down.totalInterest).toBeGreaterThan(up.totalInterest)
   })
 
+  it('refuses a quoted instalment that leaves a lump sum at maturity', () => {
+    const quoted = {
+      kind: 'periodic',
+      principal: 100_000n,
+      annualRate: '12%',
+      periodsPerYear: 12,
+      periods: 12,
+      payment: 2_000n,
+    } as const
+    expect(() => amortize(quoted)).toThrow(/is not repaid by its instalments/)
+
+    // Unless the balloon is the product, in which case the final row settles it.
+    const balloon = amortize({ ...quoted, balloon: true })
+    expect(balloon.periods[10]?.payment).toBe(2_000n)
+    expect(balloon.periods[11]?.payment).toBe(89_316n)
+    expect(balloon.periods[11]?.balance).toBe(0n)
+  })
+
   it('raises an instalment that rounding left too small to repay the loan', () => {
     // 100.03 at 16.67% over 53 years: the exact instalment is barely above the
     // interest, and rounding alone would leave the balance standing.
@@ -206,6 +231,11 @@ describe('amortize rounding of the instalment', () => {
     })
     expect(loan.payment).toBe(1_669n)
     expect(loan.periods[0]?.interest).toBe(1_668n)
-    expect(loan.periods[52]?.balance).toBe(0n)
+    // Raised by a single minor unit above the interest, the instalment repays
+    // the loan — and does it well before the 53rd period, so the schedule ends
+    // where the balance does rather than trailing empty rows.
+    expect(loan.periods.length).toBeLessThan(53)
+    expect(loan.periods[loan.periods.length - 1]?.balance).toBe(0n)
+    expect(loan.periods.reduce((sum, period) => sum + period.principal, 0n)).toBe(10_003n)
   })
 })

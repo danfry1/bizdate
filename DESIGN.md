@@ -16,9 +16,10 @@ with different denominators, and `(1 + i)^360` in a mortgage is a 1,827-digit ra
 are exact here.
 
 The public API still hands back a `number` where a `number` is what you need
-(`dayCountFraction`), converted once at the end through a fixed-point division that stays
-within one unit in the last place even when both parts overflow a double. `exactDayCountFraction`
-returns the fraction itself.
+(`dayCountFraction`), converted once at the end through a fixed-point division whose scale
+follows the size of the value: `(10/3)^400` converts correctly even though both parts
+overflow a double, and so does `1e-320`, which a fixed scaling factor would have quantised
+to zero. `exactDayCountFraction` returns the fraction itself.
 
 Money is always integer minor units as `bigint`. A `number` notional is rejected rather
 than silently rounded.
@@ -97,12 +98,41 @@ and rounded once per period; principal is the remainder; the final period absorb
 rounding left behind. The balance reaches exactly zero and the rows sum exactly to the
 amount borrowed.
 
-The instalment itself is rounded up by default, which is what lenders do — rounding an
-instalment down can leave it below the interest charge, in which case the balance never
-falls. When rounding would still leave a computed instalment short, it is raised to the
-smallest amount that repays the loan. An instalment supplied by the caller is never
-adjusted: if it cannot repay the loan, that is an `InvalidArgumentError`, because silently
-changing a lender's quoted payment would be worse than refusing.
+Where the periods are real dates, their rates differ — a 92-day quarter costs more than an
+89-day one — and the constant-rate annuity formula does not apply. The instalment is
+instead solved from the definition, `P = sum of pmt / prod(1 + i_j)`, in exact integer
+arithmetic. Sizing it from an average rate, which is the shortcut, leaves a final payment
+visibly out of line with the rest.
+
+The instalment is rounded up by default, which is what lenders do — rounding an instalment
+down can leave it below the interest charge, in which case the balance never falls. When
+rounding would still leave a computed instalment short, it is raised to the smallest amount
+that repays the loan. A computed instalment's final row can still differ from the regular
+payment by the interest rounding accumulated across the schedule, bounded by one minor unit
+per period; that bound is a property test.
+
+An instalment supplied by the caller is never adjusted, and is checked. If it leaves more
+outstanding at maturity than a regular payment, that is an `InvalidArgumentError` naming the
+shortfall, because silently turning a lender's quoted payment into a lump sum would be worse
+than refusing. `balloon: true` says the lump sum is the product.
+
+## Stubs are recorded, not inferred
+
+Whether a period is irregular is known exactly at generation time: every date produced by
+stepping the frequency is on the grid, and a period is a stub precisely when one of its
+ends had to be inserted because the effective or termination date was not on that grid.
+
+Inferring it afterwards from period lengths — the obvious shortcut — cannot tell a genuine
+stub from ordinary month-length variation. A 5-31 January monthly stub is only a few days
+short of a regular period, while a regular February period is three days shorter than a
+regular March one.
+
+## Rules describe real days
+
+A calendar rule that describes no real day is refused when the calendar is built: 31
+February, a fifth Monday, an nth of 7, a closure date that is not a date. The tempting
+alternative is to clamp — and clamping 31 February to the 28th invents a holiday the rule
+never described. A 29 February rule is legal and simply does not occur in a common year.
 
 ## Performance
 

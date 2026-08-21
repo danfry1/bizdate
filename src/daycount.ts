@@ -13,7 +13,7 @@ import {
 } from './civil.js'
 import { assertNever } from './assert.js'
 import { InvalidArgumentError } from './errors.js'
-import { type Frequency, periodsPerYear } from './frequency.js'
+import { type Frequency, frequencyStep } from './frequency.js'
 import type { StringWithHints } from './types.js'
 import { add, fraction, type Fraction, fromInteger, negate, toNumber, ZERO } from './rational.js'
 
@@ -260,7 +260,16 @@ function actActIcma(start: DateInput, end: DateInput, options: DayCountOptions):
       'frequency',
       'ACT/ACT ICMA needs the frequency of the instrument; pass { frequency } (and normally { referenceStart, referenceEnd })',
     )
-  const months = Math.round(12 / periodsPerYear(options.frequency))
+  // ICMA reference periods are whole months. A weekly or daily coupon has no
+  // month count to divide the year into, so it is refused rather than rounded
+  // to something that is not the instrument's period.
+  const step = frequencyStep(options.frequency)
+  if (step.unit !== 'months')
+    throw new InvalidArgumentError(
+      'frequency',
+      `ACT/ACT ICMA is defined for coupon periods of whole months; ${JSON.stringify(options.frequency)} is not one. Use ACT/365F or ACT/ACT ISDA for sub-monthly periods.`,
+    )
+  const months = step.count
   const referenceStart = options.referenceStart ?? start
   const referenceEnd = options.referenceEnd ?? end
   return icmaFraction(

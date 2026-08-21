@@ -27,9 +27,13 @@ Python with the `QuantLib` package:
 
 ```sh
 python -m venv .venv
-.venv/bin/pip install QuantLib
+.venv/bin/pip install -r scripts/requirements.txt   # QuantLib==1.43
 .venv/bin/python scripts/generate-golden.py tests/fixtures
 ```
+
+The version is pinned because the fixtures record which QuantLib produced them, and the
+golden tests assert it: regenerating with a different version is a deliberate act, not a
+silent change of reference.
 
 A regenerated fixture that changes an existing value is a signal in itself: either this
 package or QuantLib changed behaviour, and the pull request should say which.

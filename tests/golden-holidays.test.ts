@@ -45,7 +45,14 @@ const KNOWN_DIVERGENCES: Record<
   },
 }
 
+/** The reference version the fixtures were generated from; see scripts/requirements.txt. */
+const QUANTLIB_VERSION = '1.43'
+
 describe('holiday calendars against QuantLib', () => {
+  it('compares against the pinned reference version', () => {
+    expect(golden.quantlib).toBe(QUANTLIB_VERSION)
+  })
+
   for (const [id, expected] of Object.entries(golden.calendars)) {
     it(`${id}: every holiday through ${String(LAST_YEAR)}`, () => {
       const calendar = calendars[id as keyof typeof calendars]

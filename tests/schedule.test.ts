@@ -129,6 +129,43 @@ describe('generateSchedule', () => {
     expect(scheduleDates(schedule)).toStrictEqual(['2026-01-15', '2031-01-15'])
   })
 
+  it('marks a stub by how it was generated, not by how long it is', () => {
+    // A 5-31 January period is a genuine stub, but only 26 days shorter than a
+    // regular monthly one — close enough that a length heuristic misses it.
+    const stubbed = generateSchedule({
+      effective: '2026-01-05',
+      termination: '2026-05-31',
+      frequency: 'monthly',
+    })
+    expect(stubbed.periods.map((period) => period.isStub)).toStrictEqual([
+      true,
+      false,
+      false,
+      false,
+      false,
+    ])
+
+    // February to March is 28 days against 31, and is not a stub.
+    const regular = generateSchedule({
+      effective: '2026-01-31',
+      termination: '2026-04-30',
+      frequency: 'monthly',
+      endOfMonth: true,
+    })
+    expect(regular.periods.map((period) => period.isStub)).toStrictEqual([false, false, false])
+  })
+
+  it.each([1.5, -2, Number.NaN])('refuses a payment lag of %s', (paymentLag) => {
+    expect(() =>
+      generateSchedule({
+        effective: '2026-01-15',
+        termination: '2026-07-15',
+        frequency: 'quarterly',
+        paymentLag,
+      }),
+    ).toThrow(/paymentLag must be a whole number of business days/)
+  })
+
   it.each([
     [{ effective: '2026-01-15', termination: '2026-01-15' }, 'termination must be later'],
     [{ effective: '2026-06-15', termination: '2026-01-15' }, 'termination must be later'],

@@ -139,21 +139,43 @@ export function power(base: Fraction, exponent: number): Fraction {
   return result
 }
 
-const SCALE_BITS = 64n
+/** Position of the highest set bit, without materialising a binary string. */
+function bitLength(value: bigint): number {
+  if (value === 0n) return 0
+  const hex = value.toString(16)
+  const leading = Number.parseInt(hex.charAt(0), 16)
+  return (hex.length - 1) * 4 + (32 - Math.clz32(leading))
+}
+
+/** Multiplies by 2^-exponent in steps, so a huge exponent underflows gradually instead of at once. */
+function scaleDown(value: number, exponent: number): number {
+  let result = value
+  let remaining = exponent
+  while (remaining > 1000) {
+    result *= 2 ** -1000
+    remaining -= 1000
+  }
+  return result * 2 ** -remaining
+}
+
+/** Significant bits kept through the fixed-point division: comfortably more than a double's 53. */
+const PRECISION_BITS = 64
 
 /**
  * Converts a fraction to the nearest `number`.
  *
- * The division is done in 64 extra bits of fixed point before it reaches a
- * double, so the result is correct to within one unit in the last place even
- * when numerator and denominator are far too large for `Number` to hold.
+ * The division is done in fixed point, scaled so the quotient keeps 64
+ * significant bits whatever the size of the parts. That holds for values far too
+ * large for a double to represent — `(10/3)^400` — and equally for values far
+ * too small, where a fixed scale would have quantised the answer to zero.
  */
 export function toNumber(value: Fraction): number {
   if (value.numerator === 0n) return 0
   const negative = value.numerator < 0n
   const magnitude = negative ? -value.numerator : value.numerator
-  const scaled = (magnitude << SCALE_BITS) / value.denominator
-  const result = Number(scaled) * 2 ** -Number(SCALE_BITS)
+  const shift = Math.max(0, bitLength(value.denominator) - bitLength(magnitude) + PRECISION_BITS)
+  const scaled = (magnitude << BigInt(shift)) / value.denominator
+  const result = scaleDown(Number(scaled), shift)
   return negative ? -result : result
 }
 

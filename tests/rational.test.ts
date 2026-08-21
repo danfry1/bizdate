@@ -63,6 +63,21 @@ describe('fractions', () => {
     expect(toNumber(divide(huge, huge))).toBe(1)
   })
 
+  it.each(['1e-15', '1e-18', '1e-20', '1e-300', '1e-320', '1e300', '0.1', '-2.5'])(
+    'converts %s to the double that decimal names',
+    (decimal) => {
+      expect(toNumber(fromDecimal(decimal))).toBe(Number(decimal))
+    },
+  )
+
+  it('keeps its precision for values far below one', () => {
+    // A fixed scaling factor quantises small fractions to zero; the scale has to
+    // follow the size of the value.
+    expect(toNumber(fraction(1n, 10n ** 40n))).toBe(1e-40)
+    expect(toNumber(fraction(3n, 7n * 10n ** 30n))).toBeCloseTo(3 / (7 * 1e30), 45)
+    expect(toNumber(fraction(-1n, 10n ** 25n))).toBe(-1e-25)
+  })
+
   it('rejects nonsense', () => {
     expect(() => fraction(1n, 0n)).toThrow(InvalidArgumentError)
     expect(() => divide(fraction(1n, 2n), fraction(0n, 1n))).toThrow(InvalidArgumentError)

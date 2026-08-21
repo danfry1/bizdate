@@ -72,7 +72,7 @@ export type ScheduleOptions = {
   readonly firstRegularDate?: DateInput
   /** Start of an irregular final period. Everything before it is regular. */
   readonly lastRegularDate?: DateInput
-  /** Business days between a period's end and its payment. Defaults to 0. */
+  /** Whole business days between a period's end and its payment. Defaults to 0. */
   readonly paymentLag?: number
   /** Business-day convention for payment dates. Defaults to `following`. */
   readonly paymentConvention?: BusinessDayConvention
@@ -111,12 +111,30 @@ function rollsFromMonthEnd(date: IsoDate, calendar: Calendar): boolean {
   )
 }
 
-function unadjustedDates(options: ScheduleOptions, calendar: Calendar): readonly IsoDate[] {
+/**
+ * The unadjusted dates of a schedule, and which of its end periods are stubs.
+ *
+ * Regularity is recorded while the dates are generated, where it is known
+ * exactly: every date produced by stepping the frequency is on the grid, and a
+ * period is irregular precisely when one of its ends had to be inserted because
+ * the effective or termination date did not land on that grid. Inferring it
+ * afterwards from period lengths cannot distinguish a genuine stub from the
+ * ordinary variation between a 28-day and a 31-day month.
+ */
+function unadjustedDates(
+  options: ScheduleOptions,
+  calendar: Calendar,
+): {
+  readonly dates: readonly IsoDate[]
+  readonly firstIsStub: boolean
+  readonly lastIsStub: boolean
+} {
   const effective = toIsoDate(options.effective)
   const termination = toIsoDate(options.termination)
   if (compareDates(effective, termination) !== -1)
     throw new ScheduleError('termination must be later than effective')
-  if (options.frequency === 'term') return [effective, termination]
+  if (options.frequency === 'term')
+    return { dates: [effective, termination], firstIsStub: false, lastIsStub: false }
 
   const roll = options.roll ?? 'backward'
   const firstRegular =
@@ -135,6 +153,9 @@ function unadjustedDates(options: ScheduleOptions, calendar: Calendar): readonly
     throw new ScheduleError('firstRegularDate must be earlier than lastRegularDate')
 
   const dates: IsoDate[] = []
+  // An explicit stub boundary declares its own irregular period at that end.
+  let firstIsStub = firstRegular !== undefined
+  let lastIsStub = lastRegular !== undefined
 
   if (roll === 'backward') {
     const seed = lastRegular ?? termination
@@ -142,15 +163,17 @@ function unadjustedDates(options: ScheduleOptions, calendar: Calendar): readonly
     const endOfMonth = (options.endOfMonth ?? false) && rollsFromMonthEnd(seed, calendar)
     for (let count = 0; ; count += 1) {
       const date = step(seed, options.frequency, -count, endOfMonth)
-      if (compareDates(date, limit) !== 1) {
-        dates.unshift(date)
-        break
-      }
       dates.unshift(date)
+      if (compareDates(date, limit) !== 1) break
       if (count > 4000) throw new ScheduleError('schedule is too long to generate')
     }
+    // The walk stops at or below the limit. Landing below it means the limit is
+    // not on the grid, so the period that starts there is a stub.
     if (compareDates(dates[0] ?? limit, limit) === -1) dates.shift()
-    if (compareDates(dates[0] ?? limit, limit) !== 0) dates.unshift(limit)
+    if (compareDates(dates[0] ?? limit, limit) !== 0) {
+      dates.unshift(limit)
+      if (firstRegular === undefined) firstIsStub = true
+    }
     if (firstRegular !== undefined) dates.unshift(effective)
     if (lastRegular !== undefined) dates.push(termination)
   } else {
@@ -159,20 +182,21 @@ function unadjustedDates(options: ScheduleOptions, calendar: Calendar): readonly
     const endOfMonth = (options.endOfMonth ?? false) && rollsFromMonthEnd(seed, calendar)
     for (let count = 0; ; count += 1) {
       const date = step(seed, options.frequency, count, endOfMonth)
-      if (compareDates(date, limit) !== -1) {
-        dates.push(date)
-        break
-      }
       dates.push(date)
+      if (compareDates(date, limit) !== -1) break
       if (count > 4000) throw new ScheduleError('schedule is too long to generate')
     }
-    const last = dates[dates.length - 1] ?? limit
-    if (compareDates(last, limit) === 1) dates.pop()
-    if (compareDates(dates[dates.length - 1] ?? limit, limit) !== 0) dates.push(limit)
+    if (compareDates(dates[dates.length - 1] ?? limit, limit) === 1) dates.pop()
+    if (compareDates(dates[dates.length - 1] ?? limit, limit) !== 0) {
+      dates.push(limit)
+      if (lastRegular === undefined) lastIsStub = true
+    }
     if (firstRegular !== undefined) dates.unshift(effective)
     if (lastRegular !== undefined) dates.push(termination)
   }
-  return dates
+  // A schedule with a single period has no regular period to be odd against.
+  if (dates.length < 3) return { dates, firstIsStub: false, lastIsStub: false }
+  return { dates, firstIsStub, lastIsStub }
 }
 
 /**
@@ -190,10 +214,13 @@ export function generateSchedule(options: ScheduleOptions): Schedule {
   const terminationConvention = options.terminationConvention ?? convention
   const paymentConvention = options.paymentConvention ?? 'following'
   const paymentLag = options.paymentLag ?? 0
-  const dates = unadjustedDates(options, calendar)
+  if (!Number.isInteger(paymentLag) || paymentLag < 0)
+    throw new ScheduleError(
+      `paymentLag must be a whole number of business days and not negative; received ${String(options.paymentLag)}`,
+    )
+  const { dates, firstIsStub, lastIsStub } = unadjustedDates(options, calendar)
   if (dates.length < 2) throw new ScheduleError('a schedule needs at least one period')
 
-  const regularLength = dates.length > 2 ? medianLength(dates) : undefined
   const periods: SchedulePeriod[] = []
   for (let index = 0; index + 1 < dates.length; index += 1) {
     const unadjustedStart = dates[index] as IsoDate
@@ -205,8 +232,7 @@ export function generateSchedule(options: ScheduleOptions): Schedule {
     // two ends move onto the same open day. Such a period would accrue no
     // interest and pay twice on one date, so it is dropped.
     if (start === end) continue
-    const length = epochDayOf(unadjustedEnd) - epochDayOf(unadjustedStart)
-    const isStub = regularLength !== undefined && Math.abs(length - regularLength) > 4
+    const isStub = (index === 0 && firstIsStub) || (isLast && lastIsStub)
     const paid = paymentLag === 0 ? end : addBusinessDaysLocal(end, paymentLag, calendar)
     periods.push({
       index: periods.length,
@@ -225,14 +251,6 @@ export function generateSchedule(options: ScheduleOptions): Schedule {
     calendar,
     convention,
   })
-}
-
-function medianLength(dates: readonly IsoDate[]): number {
-  const lengths: number[] = []
-  for (let index = 0; index + 1 < dates.length; index += 1)
-    lengths.push(epochDayOf(dates[index + 1] as IsoDate) - epochDayOf(dates[index] as IsoDate))
-  lengths.sort((a, b) => a - b)
-  return lengths[Math.floor(lengths.length / 2)] ?? 0
 }
 
 function addBusinessDaysLocal(date: IsoDate, days: number, calendar: Calendar): IsoDate {

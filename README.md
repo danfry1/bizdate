@@ -1,7 +1,7 @@
 # bizdate
 
 Business days, market calendars, day count conventions and interest — for TypeScript.
-Zero dependencies, and every answer checked against QuantLib.
+Zero dependencies, and checked against QuantLib over 130 years of dates.
 
 ```ts
 import { isBusinessDay, settlementDate, nyse } from 'bizdate'
@@ -11,8 +11,9 @@ settlementDate('2026-11-25', { days: 2, calendar: nyse }) // '2026-11-30' — T+
 ```
 
 - **Real market calendars** — NYSE, SIFMA, Fedwire, US settlement, TARGET2, LSE, UK, plus
-  your own. Published rules in code, not a data feed: correct arbitrarily far forward, with
-  historical one-off closures pinned.
+  your own. Published rules in code, not a data feed, so a future year needs no update —
+  within the years each calendar states it has been checked over, and excluding closures
+  nobody has announced yet.
 - **Twelve day count conventions** — 30/360 (US and bond basis), 30E/360, 30E/360 ISDA,
   ACT/360, ACT/365F, NL/365, ACT/ACT ISDA, ACT/ACT ICMA, ACT/ACT AFB, BUS/252, 1/1 — as
   **exact fractions**, not floats.
@@ -21,8 +22,9 @@ settlementDate('2026-11-25', { days: 2, calendar: nyse }) // '2026-11-30' — T+
 - **Money that adds up** — interest and amortization in integer minor units, where the only
   rounding is the one you asked for, and an amortization schedule provably repays the
   principal to the penny.
-- **Checked against QuantLib** — every calendar day from 1971 to 2100, 46,540 day count
-  cases, 1,144 generated schedules, and every business-day convention on ~3,900 dates.
+- **Checked against QuantLib 1.43** — every holiday on eight calendars from 1971 to 2100,
+  46,540 day count cases, 1,144 generated schedules, and every business-day convention on
+  ~3,900 dates.
 - **Zero dependencies.** ESM and CommonJS. Node 20+, Deno, Bun, and every evergreen browser.
 
 ## Install
@@ -165,12 +167,19 @@ loan.periods[359].balance        // 0n — exactly, always
 loan.periods.reduce((sum, p) => sum + p.principal, 0n) === 250_000_00n  // true
 ```
 
+The instalment is the exact annuity for the periods given, rounded up as a lender would;
+the final payment differs from it only by the rounding accumulated along the way. An
+instalment you supply yourself is checked rather than adjusted: one too small to repay the
+loan is refused unless you pass `balloon: true`, because silently turning a quoted payment
+into a lump sum at maturity would be worse than an error.
+
 `(1 + i)^360` is a ratio of two 1,827-digit integers. It is carried exactly and rounded
 once, rather than accumulated through 360 floating-point multiplications — and a
 360-period schedule still builds in about 0.2 ms.
 
 Interest can also be charged on real dates rather than nominal periods, which is what a
-loan actually does:
+loan actually does. Period rates then differ — a 92-day quarter costs more than an 89-day
+one — so the instalment is solved for those actual periods rather than an average:
 
 ```ts
 amortize({
@@ -188,7 +197,8 @@ total always survives the division.
 ## Correctness
 
 The reference implementation for this domain is QuantLib, which the industry has checked
-its own systems against for twenty years. This package is tested against it directly:
+its own systems against for twenty years. The fixtures are generated from **QuantLib 1.43**
+and compared exactly:
 
 | What | Cases |
 | --- | --- |
@@ -200,9 +210,29 @@ its own systems against for twenty years. This package is tested against it dire
 | Schedule generation | 1,144 schedules, date for date |
 
 Two places deliberately disagree with QuantLib, both listed in the tests with a reason:
-Martin Luther King Jr. Day, which QuantLib starts in 1983 but which Public Law 98-144 first
-made an observed holiday in 1986; and the SIFMA close for President Carter's funeral on
-9 January 2025, which QuantLib does not carry.
+Martin Luther King Jr. Day, which QuantLib starts in 1983 but which
+[Public Law 98-144](https://www.govinfo.gov/content/pkg/STATUTE-97/pdf/STATUTE-97-Pg917.pdf)
+first made an observed holiday in 1986; and the SIFMA close for President Carter's funeral
+on 9 January 2025, which QuantLib does not carry.
+
+### What is not covered
+
+- **Early closes.** These calendars answer whether a market is open, not what time it
+  shuts. The half-days around Thanksgiving, Christmas Eve and the SIFMA recommended
+  early closes are ordinary business days here.
+- **Closures nobody has announced yet.** A funeral, a storm or a proclaimed holiday
+  becomes a pinned date in a patch release. A schedule built today cannot know about one.
+- **Years outside each calendar's window.** `validFrom` and `validThrough` are checked, and
+  a query outside them throws rather than guessing.
+- **Intraday anything.** No times, no time zones, no cut-offs.
+
+Primary sources for the shipped calendars:
+[NYSE holidays and hours](https://www.nyse.com/markets/hours-calendars),
+[SIFMA holiday schedule](https://www.sifma.org/resources/general/holiday-schedule/),
+[Federal Reserve Bank services holidays](https://www.frbservices.org/about/holiday-schedules),
+[US federal holidays (OPM)](https://www.opm.gov/policy-data-oversight/pay-leave/federal-holidays/),
+[ECB TARGET closing days](https://www.ecb.europa.eu/paym/target/html/index.en.html),
+[UK bank holidays](https://www.gov.uk/bank-holidays).
 
 Beyond the reference tests: property-based tests (fast-check) pin the invariants that must
 hold for every input — day count fractions are antisymmetric, an allocation always sums to

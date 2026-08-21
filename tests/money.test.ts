@@ -56,6 +56,15 @@ describe('allocate', () => {
     expect(allocate(100n, [1n, 0n, 1n])).toStrictEqual([50n, 0n, 50n])
   })
 
+  it('takes fractional weights exactly', () => {
+    // A weight of 1e-7 is a real weight, not a rounding artefact: it earns no
+    // whole unit here, but it is not silently treated as zero either.
+    expect(allocate(1_000_000n, [0.0000001, 1])).toStrictEqual([0n, 1_000_000n])
+    expect(allocate(1_000_000n, [0.0000001, 0.0000001])).toStrictEqual([500_000n, 500_000n])
+    expect(allocate(100n, [0.5, 0.25, 0.25])).toStrictEqual([50n, 25n, 25n])
+    expect(allocate(10n, [1 / 3, 2 / 3])).toStrictEqual([3n, 7n])
+  })
+
   it('rejects impossible weightings', () => {
     expect(() => allocate(100n, [])).toThrow(InvalidArgumentError)
     expect(() => allocate(100n, [0, 0])).toThrow(InvalidArgumentError)

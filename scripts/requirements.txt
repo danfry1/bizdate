@@ -1,0 +1,3 @@
+# Pinned so the golden fixtures always name the reference that produced them.
+# The version is recorded in each fixture and asserted by the golden tests.
+QuantLib==1.43

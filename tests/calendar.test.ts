@@ -130,6 +130,40 @@ describe('custom and joint calendars', () => {
     expect(() => jointCalendar(nyse)).toThrow(InvalidArgumentError)
   })
 
+  it.each([
+    [
+      { kind: 'fixed', name: 'Impossible', month: 2, day: 31 } as const,
+      /must be a whole number from 1 to 29/,
+    ],
+    [{ kind: 'fixed', name: 'Bad month', month: 13, day: 1 } as const, /month.*1 to 12/],
+    [
+      { kind: 'nth-weekday', name: 'Bad nth', month: 5, weekday: 1, nth: 7 } as const,
+      /must be 1, 2, 3, 4 or -1/,
+    ],
+    [
+      { kind: 'nth-weekday', name: 'Bad weekday', month: 5, weekday: 8, nth: 1 } as const,
+      /ISO weekday/,
+    ],
+    [{ kind: 'easter', name: 'Far off', offset: 400 } as const, /within a year of Easter/],
+    [{ kind: 'one-off', name: 'Bad date', date: '2026-02-30' } as const, /Cannot parse/],
+  ])('refuses a rule that describes no real day (%#)', (rule, message) => {
+    expect(() =>
+      // @ts-expect-error the invalid members are rejected at compile time too
+      customCalendar({ id: 'x', rules: [rule], validFrom: 2020, validThrough: 2030 }),
+    ).toThrow(message)
+  })
+
+  it('does not invent a leap day in a common year', () => {
+    const leapDay = customCalendar({
+      id: 'leap',
+      rules: [{ kind: 'fixed', name: 'Leap Day', month: 2, day: 29 }],
+      validFrom: 2020,
+      validThrough: 2030,
+    })
+    expect(holidays(leapDay, 2024)).toStrictEqual([{ date: '2024-02-29', name: 'Leap Day' }])
+    expect(holidays(leapDay, 2026)).toStrictEqual([])
+  })
+
   it('rejects a custom calendar with an impossible validity window', () => {
     expect(() => customCalendar({ id: 'x', validFrom: 2030, validThrough: 2020 })).toThrow(
       InvalidArgumentError,

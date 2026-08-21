@@ -6,6 +6,7 @@ import { generateSchedule, type RollDirection, scheduleDates } from '../src/sche
 import fixture from './fixtures/quantlib-schedule.json' with { type: 'json' }
 
 type Fixture = {
+  readonly quantlib: string
   readonly cases: readonly {
     readonly effective: string
     readonly termination: string
@@ -23,6 +24,10 @@ type Fixture = {
 const golden = fixture as Fixture
 
 describe('schedule generation against QuantLib', () => {
+  it('compares against the pinned reference version', () => {
+    expect(golden.quantlib).toBe('1.43')
+  })
+
   it(`reproduces ${String(golden.cases.length)} schedules date for date`, () => {
     const mismatches: string[] = []
     for (const testCase of golden.cases) {

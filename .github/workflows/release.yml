@@ -72,7 +72,16 @@ jobs:
         # via OIDC trusted publishing. The version is NOT installable until a
         # maintainer approves it with a 2FA challenge:
         #   npm stage approve <id>   (or approve on npmjs.com)
-        run: npm stage publish
+        # A prerelease version publishes under the "beta" dist-tag, so it never
+        # becomes what `npm install bizdate` resolves to.
+        run: |
+          VERSION=$(node -p 'require("./package.json").version')
+          case "$VERSION" in
+            *-*) TAG=beta ;;
+            *) TAG=latest ;;
+          esac
+          echo "publishing $VERSION under dist-tag $TAG"
+          npm stage publish --tag "$TAG"
 
       - name: Staged-publish approval reminder
         run: echo "::notice::Version staged to npm. Approve it (npm stage approve <id>, or on npmjs.com) with 2FA to make it installable."

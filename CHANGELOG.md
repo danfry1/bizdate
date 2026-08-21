@@ -4,7 +4,9 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2026-08-21
+## [0.1.0-beta.1] - 2026-08-21
+
+First public release, published under the `beta` dist-tag while the API settles.
 
 ### Added
 
@@ -23,3 +25,14 @@ All notable changes to this project are documented here. The format follows
 - Exact rational arithmetic (`Fraction`) and civil date utilities.
 - Typed errors with literal codes: `DateParseError`, `InvalidDateError`,
   `InvalidArgumentError`, `CalendarRangeError`, `ScheduleError`.
+
+### Notes
+
+Findings from a pre-release review, all fixed before this release and covered by regression
+tests: the fixed-point conversion in `toNumber` quantised very small fractions towards zero;
+`ACT/ACT ICMA` accepted sub-monthly frequencies it cannot express; schedules accepted
+fractional and negative payment lags and inferred stubs from period lengths; dated
+amortization sized its instalment from an average rate rather than solving the
+variable-period annuity, and a caller-supplied instalment too small to repay the loan
+produced a silent balloon; custom calendar rules describing impossible dates were clamped
+rather than refused; and `allocate` quantised fractional weights to six decimal places.

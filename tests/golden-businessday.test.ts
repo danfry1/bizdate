@@ -11,6 +11,7 @@ import { addDays } from '../src/civil.js'
 import fixture from './fixtures/quantlib-adjust.json' with { type: 'json' }
 
 type Fixture = {
+  readonly quantlib: string
   readonly cases: readonly {
     readonly calendar: string
     readonly date: string
@@ -24,6 +25,10 @@ type Fixture = {
 const golden = fixture as Fixture
 
 describe('business day handling against QuantLib', () => {
+  it('compares against the pinned reference version', () => {
+    expect(golden.quantlib).toBe('1.43')
+  })
+
   const byCalendar = new Map<string, Fixture['cases'][number][]>()
   for (const testCase of golden.cases) {
     const existing = byCalendar.get(testCase.calendar)

@@ -139,11 +139,20 @@ describe('amortization properties', () => {
             periods,
             periodsPerYear,
           })
-          expect(loan.periods).toHaveLength(periods)
-          expect(loan.periods[periods - 1]?.balance).toBe(0n)
+          expect(loan.periods.length).toBeGreaterThan(0)
+          // A schedule can end early when a rounded-up instalment repays the
+          // balance before the last period, but never runs longer than asked.
+          expect(loan.periods.length).toBeLessThanOrEqual(periods)
+          expect(loan.periods[loan.periods.length - 1]?.balance).toBe(0n)
           expect(loan.periods.reduce((sum, period) => sum + period.principal, 0n)).toBe(principal)
           expect(loan.totalPaid).toBe(principal + loan.totalInterest)
           expect(loan.periods.every((period) => period.balance >= 0n)).toBe(true)
+          // Every payment but the last is exactly the quoted instalment; only
+          // the final row carries the difference that rounding left behind.
+          const regular = loan.periods.slice(0, -1).map((period) => period.payment)
+          expect(new Set(regular).size).toBeLessThanOrEqual(1)
+          if (regular.length > 0) expect(regular[0]).toBe(loan.payment)
+          expect(loan.periods[loan.periods.length - 1]?.payment).toBeGreaterThan(0n)
         },
       ),
       { numRuns: 200 },

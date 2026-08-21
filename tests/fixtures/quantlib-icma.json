@@ -1,0 +1,117 @@
+{
+  "quantlib": "1.43",
+  "cases": [
+    {
+      "start": "2003-11-01",
+      "end": "2004-05-01",
+      "referenceStart": "2003-11-01",
+      "referenceEnd": "2004-05-01",
+      "frequency": "semi-annual",
+      "fraction": 0.5
+    },
+    {
+      "start": "2003-11-01",
+      "end": "2004-01-15",
+      "referenceStart": "2003-11-01",
+      "referenceEnd": "2004-05-01",
+      "frequency": "semi-annual",
+      "fraction": 0.20604395604395603
+    },
+    {
+      "start": "2004-02-01",
+      "end": "2004-05-30",
+      "referenceStart": "2004-02-01",
+      "referenceEnd": "2004-08-01",
+      "frequency": "semi-annual",
+      "fraction": 0.3269230769230769
+    },
+    {
+      "start": "2004-02-01",
+      "end": "2004-04-01",
+      "referenceStart": "2004-02-01",
+      "referenceEnd": "2004-08-01",
+      "frequency": "semi-annual",
+      "fraction": 0.16483516483516483
+    },
+    {
+      "start": "2003-02-15",
+      "end": "2003-07-15",
+      "referenceStart": "2003-02-15",
+      "referenceEnd": "2003-08-15",
+      "frequency": "semi-annual",
+      "fraction": 0.4143646408839779
+    },
+    {
+      "start": "2026-01-31",
+      "end": "2026-04-30",
+      "referenceStart": "2026-01-31",
+      "referenceEnd": "2026-07-31",
+      "frequency": "semi-annual",
+      "fraction": 0.24585635359116023
+    },
+    {
+      "start": "2026-02-28",
+      "end": "2026-05-31",
+      "referenceStart": "2026-02-28",
+      "referenceEnd": "2026-08-31",
+      "frequency": "semi-annual",
+      "fraction": 0.25
+    },
+    {
+      "start": "2024-01-01",
+      "end": "2024-12-31",
+      "referenceStart": "2024-01-01",
+      "referenceEnd": "2025-01-01",
+      "frequency": "annual",
+      "fraction": 0.9972677595628415
+    },
+    {
+      "start": "2024-03-15",
+      "end": "2024-06-15",
+      "referenceStart": "2024-03-15",
+      "referenceEnd": "2024-06-15",
+      "frequency": "quarterly",
+      "fraction": 0.25
+    },
+    {
+      "start": "2024-03-15",
+      "end": "2024-05-01",
+      "referenceStart": "2024-03-15",
+      "referenceEnd": "2024-06-15",
+      "frequency": "quarterly",
+      "fraction": 0.12771739130434784
+    },
+    {
+      "start": "2024-01-15",
+      "end": "2024-02-15",
+      "referenceStart": "2024-01-15",
+      "referenceEnd": "2024-02-15",
+      "frequency": "monthly",
+      "fraction": 0.08333333333333333
+    },
+    {
+      "start": "2024-02-29",
+      "end": "2024-08-29",
+      "referenceStart": "2024-02-29",
+      "referenceEnd": "2024-08-29",
+      "frequency": "semi-annual",
+      "fraction": 0.5
+    },
+    {
+      "start": "2023-12-31",
+      "end": "2024-06-30",
+      "referenceStart": "2023-12-31",
+      "referenceEnd": "2024-06-30",
+      "frequency": "semi-annual",
+      "fraction": 0.5
+    },
+    {
+      "start": "2024-05-31",
+      "end": "2024-11-30",
+      "referenceStart": "2024-05-31",
+      "referenceEnd": "2024-11-30",
+      "frequency": "semi-annual",
+      "fraction": 0.5
+    }
+  ]
+}

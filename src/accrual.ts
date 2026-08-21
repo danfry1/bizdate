@@ -7,15 +7,15 @@ import {
 import { InvalidArgumentError } from './errors.js'
 import { type Rounding, roundFraction, roundRatio } from './money.js'
 import {
-  add,
-  divide,
+  addFractions,
+  divideFractions,
   type Fraction,
-  fromInteger,
-  multiply,
+  fractionFromInteger,
+  multiplyFractions,
   ONE,
-  power,
+  raiseFraction,
   type RateInput,
-  subtract,
+  subtractFractions,
   toFraction,
   ZERO,
 } from './rational.js'
@@ -53,7 +53,7 @@ export function accrueExact(options: AccrualOptions): Fraction {
     options.convention,
     options.dayCount ?? {},
   )
-  return multiply(multiply(fromInteger(options.notional), rate), fraction)
+  return multiplyFractions(multiplyFractions(fractionFromInteger(options.notional), rate), fraction)
 }
 
 /**
@@ -152,13 +152,13 @@ function periodRates(options: AmortizationOptions): readonly Fraction[] {
       throw new InvalidArgumentError('periods', 'must be a positive integer')
     if (!Number.isInteger(options.periodsPerYear) || options.periodsPerYear < 1)
       throw new InvalidArgumentError('periodsPerYear', 'must be a positive integer')
-    const rate = divide(annual, fromInteger(options.periodsPerYear))
+    const rate = divideFractions(annual, fractionFromInteger(options.periodsPerYear))
     return Array.from({ length: options.periods }, () => rate)
   }
   if (options.schedule.periods.length === 0)
     throw new InvalidArgumentError('schedule', 'must have at least one period')
   return options.schedule.periods.map((period) =>
-    multiply(
+    multiplyFractions(
       annual,
       exactDayCountFraction(period.start, period.end, options.convention, options.dayCount ?? {}),
     ),
@@ -238,10 +238,13 @@ export function exactLevelPayment(
   if (!Number.isInteger(periods) || periods < 1)
     throw new InvalidArgumentError('periods', 'must be a positive integer')
   const rate = toFraction(periodRate, 'periodRate')
-  const balance = fromInteger(principal)
-  if (rate.numerator === 0n) return divide(balance, fromInteger(periods))
-  const growth = power(add(ONE, rate), periods)
-  return divide(multiply(multiply(balance, rate), growth), subtract(growth, ONE))
+  const balance = fractionFromInteger(principal)
+  if (rate.numerator === 0n) return divideFractions(balance, fractionFromInteger(periods))
+  const growth = raiseFraction(addFractions(ONE, rate), periods)
+  return divideFractions(
+    multiplyFractions(multiplyFractions(balance, rate), growth),
+    subtractFractions(growth, ONE),
+  )
 }
 
 /**
@@ -299,7 +302,10 @@ export function amortize(options: AmortizationOptions): Amortization {
   // exceeds the principal. An instalment above it repays the loan whatever the
   // rounding did.
   const interestCeiling = rates.reduce((largest, rate) => {
-    const interest = roundFraction(multiply(fromInteger(options.principal), rate), rounding)
+    const interest = roundFraction(
+      multiplyFractions(fractionFromInteger(options.principal), rate),
+      rounding,
+    )
     return interest > largest ? interest : largest
   }, 0n)
 
@@ -318,7 +324,7 @@ export function amortize(options: AmortizationOptions): Amortization {
 
   for (let index = 0; index < count; index += 1) {
     const rate = rates[index] ?? ZERO
-    const interest = roundFraction(multiply(fromInteger(balance), rate), rounding)
+    const interest = roundFraction(multiplyFractions(fractionFromInteger(balance), rate), rounding)
     const isLast = index === count - 1
     let principalPart: bigint
     switch (method) {

@@ -4,11 +4,12 @@ import { isBusinessDay } from '../src/businessday.js'
 import { nyse } from '../src/calendars/index.js'
 import {
   addYears,
-  civilFromDays,
+  dateFromEpochDay,
   daysInYear,
   isAfter,
   isBefore,
   isSameDate,
+  toCivil,
   today,
 } from '../src/civil.js'
 import {
@@ -96,7 +97,7 @@ describe('remaining date helpers', () => {
     expect(addYears('2026-01-31', 1)).toBe('2027-01-31')
     expect(daysInYear(2024)).toBe(366)
     expect(daysInYear(2026)).toBe(365)
-    expect(civilFromDays(0)).toStrictEqual({ year: 1970, month: 1, day: 1 })
+    expect(toCivil(dateFromEpochDay(0))).toStrictEqual({ year: 1970, month: 1, day: 1 })
   })
 
   it('reads today in the zone you name', () => {

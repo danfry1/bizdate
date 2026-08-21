@@ -3,6 +3,7 @@ import {
   accrue,
   addBusinessDays,
   adjust,
+  customCalendar,
   allocate,
   amortize,
   businessDaysBetween,
@@ -16,9 +17,10 @@ import {
   nextBusinessDay,
   nyse,
   parseDate,
+  previousBusinessDay,
   settlementDate,
   target,
-  toFractionString,
+  fractionToString,
 } from '../src/index.js'
 
 /** Every claim the README makes, run as a test so the documentation cannot rot. */
@@ -45,11 +47,11 @@ describe('README', () => {
   it('day count conventions', () => {
     expect(dayCountFraction('2026-01-31', '2026-07-31', 'ACT/365F')).toBe(0.4958904109589041)
     expect(dayCountFraction('2026-01-31', '2026-07-31', '30E/360')).toBe(0.5)
-    expect(toFractionString(exactDayCountFraction('2026-01-31', '2026-07-31', 'ACT/365F'))).toBe(
+    expect(fractionToString(exactDayCountFraction('2026-01-31', '2026-07-31', 'ACT/365F'))).toBe(
       '181/365',
     )
     expect(
-      toFractionString(exactDayCountFraction('2023-12-01', '2024-02-01', 'ACT/ACT ISDA')),
+      fractionToString(exactDayCountFraction('2023-12-01', '2024-02-01', 'ACT/ACT ISDA')),
     ).toBe('22661/133590')
   })
 
@@ -104,5 +106,59 @@ describe('README', () => {
     expect(parsed.ok).toBe(false)
     if (parsed.ok) throw new Error('expected a failure')
     expect(parsed.error.reason).toBe('day must be 01-28 for month 02 of 2026')
+  })
+})
+
+/** The migration guide's examples, minus the one needing `date-holidays` as a dependency. */
+describe('MIGRATING', () => {
+  it('turns your own holiday list and rules into a calendar', () => {
+    const office = customCalendar({
+      id: 'acme',
+      dates: ['2026-07-06', '2026-12-24', '2026-12-31'],
+      rules: [
+        { kind: 'fixed', name: "Founders' Day", month: 9, day: 1, observed: 'nearest-weekday' },
+        { kind: 'nth-weekday', name: 'Volunteering Day', month: 6, weekday: 5, nth: 1 },
+      ],
+      validFrom: 2024,
+      validThrough: 2030,
+    })
+    expect(isBusinessDay('2026-07-06', office)).toBe(false)
+    expect(holidays(office, 2026).map((holiday) => holiday.date)).toStrictEqual([
+      '2026-06-05',
+      '2026-07-06',
+      '2026-09-01',
+      '2026-12-24',
+      '2026-12-31',
+    ])
+  })
+
+  it('counts business days the way the guide says it does', () => {
+    expect(addBusinessDays('2026-11-24', 3, nyse)).toBe('2026-11-30')
+    expect(addBusinessDays('2026-11-30', -3, nyse)).toBe('2026-11-24')
+    expect(addBusinessDays('2026-11-26', 0, nyse)).toBe('2026-11-26')
+    expect(adjust('2026-11-26', 'following', nyse)).toBe('2026-11-27')
+    expect(previousBusinessDay('2026-11-27', nyse)).toBe('2026-11-25')
+  })
+
+  it('produces the date-holidays bridge result for the UK', () => {
+    // The same public holidays `date-holidays` reports for GB in 2026, fed in
+    // as a list — the bridge in MIGRATING.md, without the dependency.
+    const unitedKingdomPublic = customCalendar({
+      id: 'gb-public',
+      dates: [
+        '2026-01-01',
+        '2026-04-03',
+        '2026-04-06',
+        '2026-05-04',
+        '2026-05-25',
+        '2026-08-31',
+        '2026-12-25',
+        '2026-12-26',
+        '2026-12-28',
+      ],
+      validFrom: 2026,
+      validThrough: 2026,
+    })
+    expect(addBusinessDays('2026-12-24', 2, unitedKingdomPublic)).toBe('2026-12-30')
   })
 })

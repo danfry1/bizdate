@@ -1,13 +1,9 @@
 # bizdate
 
 [![CI](https://github.com/danfry1/bizdate/actions/workflows/ci.yml/badge.svg)](https://github.com/danfry1/bizdate/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/bizdate/beta.svg)](https://www.npmjs.com/package/bizdate)
+[![npm](https://img.shields.io/npm/v/bizdate.svg)](https://www.npmjs.com/package/bizdate)
 [![zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](https://github.com/danfry1/bizdate/blob/main/package.json)
 [![license](https://img.shields.io/npm/l/bizdate.svg)](https://github.com/danfry1/bizdate/blob/main/LICENSE)
-
-> **Beta.** The API is settled enough to use and to depend on a `0.1.0-beta.x`
-> range, but names may still change before 0.1.0 proper. Feedback from anyone
-> doing this for a living is exactly what this release is for.
 
 Business days, market calendars, day count conventions and interest — for TypeScript.
 Zero dependencies, and checked against QuantLib over 130 years of dates.
@@ -34,12 +30,13 @@ settlementDate('2026-11-25', { days: 2, calendar: nyse }) // '2026-11-30' — T+
 - **Checked against QuantLib 1.43** — every holiday on eight calendars from 1971 to 2100,
   46,540 day count cases, 1,144 generated schedules, and every business-day convention on
   ~3,900 dates.
-- **Zero dependencies.** ESM and CommonJS. Node 20+, Deno, Bun, and every evergreen browser.
+- **Zero dependencies.** ESM and CommonJS, Node 20+, Deno, Bun and every evergreen browser.
+  Tree-shakes: 4 KB gzipped for the business-day path, 12 KB for all of it.
 
 ## Install
 
 ```sh
-npm install bizdate@beta   # or: pnpm add · yarn add · bun add — all with @beta
+npm install bizdate      # or: pnpm add bizdate · yarn add bizdate · bun add bizdate
 ```
 
 ```ts
@@ -75,9 +72,14 @@ holidays(lse, 2026)
 ```
 
 Dates are plain `YYYY-MM-DD` strings in, plain strings out. No wrapper objects, no plugin
-to register, and no dependency on `moment`, `dayjs`, `luxon` or `date-fns`.
+to register, and no dependency on `moment`, `dayjs`, `luxon` or `date-fns`. A
+`Temporal.PlainDate` is accepted anywhere a date is — it already has `year`, `month` and
+`day` — and `Temporal.PlainDate.from(result)` converts back.
 
 ### Coming from `moment-business-days`
+
+Full guide, including Day.js and Luxon plugins and a `date-holidays` bridge for national
+holidays: [MIGRATING.md](MIGRATING.md).
 
 | moment-business-days | bizdate |
 | --- | --- |
@@ -287,8 +289,11 @@ unpadded fields, times, and offsets.
 
 ## Documentation
 
+- [MIGRATING.md](MIGRATING.md) — swaps for `moment-business-days`, the Day.js and Luxon
+  plugins, your own holiday list, and countries this package does not ship.
 - [DESIGN.md](DESIGN.md) — why the API looks like this: exact arithmetic, no `Date`, where
   `Result` earns its place, and where this package deviates from QuantLib.
+- [API-STABILITY.md](API-STABILITY.md) — what is frozen, what is not, and what is still open.
 - [CHANGELOG.md](CHANGELOG.md)
 
 ## License

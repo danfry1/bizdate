@@ -15,7 +15,15 @@ import { assertNever } from './assert.js'
 import { InvalidArgumentError } from './errors.js'
 import { type Frequency, frequencyStep } from './frequency.js'
 import type { StringWithHints } from './types.js'
-import { add, fraction, type Fraction, fromInteger, negate, toNumber, ZERO } from './rational.js'
+import {
+  addFractions,
+  fraction,
+  type Fraction,
+  fractionFromInteger,
+  negateFraction,
+  fractionToNumber,
+  ZERO,
+} from './rational.js'
 
 /**
  * A day count convention: how a stretch of calendar time is turned into a
@@ -222,7 +230,7 @@ function actActIsda(start: DateInput, end: DateInput): Fraction {
     BigInt(daysBetween(startOfEndYear, end)),
     BigInt(isLeapYear(to.year) ? 366 : 365),
   )
-  return add(add(head, tail), fromInteger(to.year - from.year - 1))
+  return addFractions(addFractions(head, tail), fractionFromInteger(to.year - from.year - 1))
 }
 
 function actActAfb(start: DateInput, end: DateInput): Fraction {
@@ -251,7 +259,10 @@ function actActAfb(start: DateInput, end: DateInput): Fraction {
     (endCivil.year !== startCivil.year && spansFeb29(startCivil.year))
   )
     denominator = 366
-  return add(fromInteger(whole), fraction(BigInt(daysBetween(start, newEnd)), BigInt(denominator)))
+  return addFractions(
+    fractionFromInteger(whole),
+    fraction(BigInt(daysBetween(start, newEnd)), BigInt(denominator)),
+  )
 }
 
 function actActIcma(start: DateInput, end: DateInput, options: DayCountOptions): Fraction {
@@ -290,7 +301,7 @@ function icmaFraction(
 ): Fraction {
   if (epochDayOf(start) === epochDayOf(end)) return ZERO
   if (epochDayOf(start) > epochDayOf(end))
-    return negate(icmaFraction(end, start, referenceStart, referenceEnd, months))
+    return negateFraction(icmaFraction(end, start, referenceStart, referenceEnd, months))
   const period = fraction(BigInt(months), 12n)
   if (epochDayOf(end) <= epochDayOf(referenceEnd)) {
     if (epochDayOf(start) >= epochDayOf(referenceStart))
@@ -301,7 +312,7 @@ function icmaFraction(
       )
     const previousReference = addMonths(referenceStart, -months)
     return epochDayOf(end) > epochDayOf(referenceStart)
-      ? add(
+      ? addFractions(
           icmaFraction(start, referenceStart, previousReference, referenceStart, months),
           icmaFraction(referenceStart, end, referenceStart, referenceEnd, months),
         )
@@ -315,10 +326,10 @@ function icmaFraction(
     nextStart = addMonths(referenceEnd, months * index)
     nextEnd = addMonths(referenceEnd, months * (index + 1))
     if (epochDayOf(end) < epochDayOf(nextEnd)) break
-    sum = add(sum, period)
+    sum = addFractions(sum, period)
     index += 1
   }
-  return add(sum, icmaFraction(nextStart, end, nextStart, nextEnd, months))
+  return addFractions(sum, icmaFraction(nextStart, end, nextStart, nextEnd, months))
 }
 
 const multiplyPeriod = (period: Fraction, days: number, periodDays: number): Fraction =>
@@ -344,7 +355,7 @@ export function exactDayCountFraction(
   const from = toIsoDate(start)
   const to = toIsoDate(end)
   if (epochDayOf(from) > epochDayOf(to))
-    return negate(exactDayCountFraction(to, from, canonical, options))
+    return negateFraction(exactDayCountFraction(to, from, canonical, options))
   switch (canonical) {
     case '30/360':
     case '30/360 US':
@@ -372,7 +383,7 @@ export function exactDayCountFraction(
       return fraction(BigInt(businessDaysBetween(from, to, options.calendar)), 252n)
     }
     case '1/1':
-      return fromInteger(1)
+      return fractionFromInteger(1)
     default:
       return assertNever(canonical)
   }
@@ -391,7 +402,7 @@ export function dayCountFraction(
   convention: DayCountConventionInput,
   options: DayCountOptions = {},
 ): number {
-  return toNumber(exactDayCountFraction(start, end, convention, options))
+  return fractionToNumber(exactDayCountFraction(start, end, convention, options))
 }
 
 /**

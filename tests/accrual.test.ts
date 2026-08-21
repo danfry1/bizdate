@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { accrue, accrueExact, amortize, exactLevelPayment } from '../src/accrual.js'
 import { nyse } from '../src/calendars/index.js'
 import { InvalidArgumentError } from '../src/errors.js'
-import { fraction, toFractionString, toNumber } from '../src/rational.js'
+import { fraction, fractionToString, fractionToNumber } from '../src/rational.js'
 import { generateSchedule } from '../src/schedule.js'
 
 describe('accrue', () => {
@@ -14,7 +14,7 @@ describe('accrue', () => {
       end: '2026-07-31',
       convention: 'ACT/365F',
     } as const
-    expect(toFractionString(accrueExact(options))).toBe('190050000/73')
+    expect(fractionToString(accrueExact(options))).toBe('190050000/73')
     expect(accrue(options)).toBe(2_603_425n)
   })
 
@@ -95,7 +95,7 @@ describe('amortize', () => {
     const exact = exactLevelPayment(250_000_00n, fraction(499n, 120_000n), 360)
     expect(exact.denominator.toString()).toHaveLength(1827)
     expect(Number(exact.numerator)).toBe(Number.POSITIVE_INFINITY)
-    expect(toNumber(exact)).toBeCloseTo(134_052.657_959_465_26, 6)
+    expect(fractionToNumber(exact)).toBeCloseTo(134_052.657_959_465_26, 6)
   })
 
   it('repays equal principal each period when asked', () => {

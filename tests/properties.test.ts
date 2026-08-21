@@ -6,7 +6,13 @@ import { lse, nyse, target } from '../src/calendars/index.js'
 import { addDays, dateFromEpochDay, daysBetween, epochDayOf } from '../src/civil.js'
 import { DAY_COUNT_CONVENTIONS, exactDayCountFraction } from '../src/daycount.js'
 import { allocate, type Rounding, roundFraction } from '../src/money.js'
-import { compare, fraction, multiply, subtract, toNumber } from '../src/rational.js'
+import {
+  compareFractions,
+  fraction,
+  multiplyFractions,
+  subtractFractions,
+  fractionToNumber,
+} from '../src/rational.js'
 
 const CALENDARS = [nyse, target, lse] as const
 /** 2000-01-01 to 2060-12-31, inside every shipped calendar's validated range. */
@@ -36,9 +42,9 @@ describe('day count properties', () => {
         fc.constantFrom(...conventions),
         (start, offset, convention) => {
           const end = addDays(start, offset)
-          expect(compare(exactDayCountFraction(start, end, convention), fraction(0n, 1n))).not.toBe(
-            -1,
-          )
+          expect(
+            compareFractions(exactDayCountFraction(start, end, convention), fraction(0n, 1n)),
+          ).not.toBe(-1)
         },
       ),
     )
@@ -48,7 +54,10 @@ describe('day count properties', () => {
     fc.assert(
       fc.property(date, date, fc.constantFrom(...conventions), (start, end, convention) => {
         const exact = exactDayCountFraction(start, end, convention)
-        expect(toNumber(exact)).toBeCloseTo(Number(exact.numerator) / Number(exact.denominator), 10)
+        expect(fractionToNumber(exact)).toBeCloseTo(
+          Number(exact.numerator) / Number(exact.denominator),
+          10,
+        )
       }),
     )
   })
@@ -100,8 +109,8 @@ describe('money properties', () => {
         (numerator, denominator, mode) => {
           const value = fraction(numerator, denominator)
           const rounded = roundFraction(value, mode)
-          const difference = subtract(value, fraction(rounded, 1n))
-          expect(Math.abs(toNumber(difference))).toBeLessThan(1)
+          const difference = subtractFractions(value, fraction(rounded, 1n))
+          expect(Math.abs(fractionToNumber(difference))).toBeLessThan(1)
         },
       ),
     )
@@ -177,7 +186,10 @@ describe('amortization properties', () => {
           if (first === undefined) throw new Error('expected a first period')
           expect(first.interest).toBe(
             roundFraction(
-              multiply(fraction(principal, 1n), fraction(rate.numerator, rate.denominator * 12n)),
+              multiplyFractions(
+                fraction(principal, 1n),
+                fraction(rate.numerator, rate.denominator * 12n),
+              ),
             ),
           )
         },
@@ -202,7 +214,7 @@ describe('accrual properties', () => {
           } as const
           const single = accrueExact({ ...period, notional })
           const double = accrueExact({ ...period, notional: notional * 2n })
-          expect(compare(multiply(single, fraction(2n, 1n)), double)).toBe(0)
+          expect(compareFractions(multiplyFractions(single, fraction(2n, 1n)), double)).toBe(0)
         },
       ),
     )

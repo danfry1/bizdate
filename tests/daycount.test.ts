@@ -8,17 +8,17 @@ import {
   normalizeConvention,
 } from '../src/daycount.js'
 import { InvalidArgumentError } from '../src/errors.js'
-import { toFractionString } from '../src/rational.js'
+import { fractionToString } from '../src/rational.js'
 
 describe('exact day count fractions', () => {
   it('is a ratio of integers, not a float', () => {
-    expect(toFractionString(exactDayCountFraction('2026-01-01', '2026-07-01', 'ACT/365F'))).toBe(
+    expect(fractionToString(exactDayCountFraction('2026-01-01', '2026-07-01', 'ACT/365F'))).toBe(
       '181/365',
     )
-    expect(toFractionString(exactDayCountFraction('2026-01-01', '2026-07-01', 'ACT/360'))).toBe(
+    expect(fractionToString(exactDayCountFraction('2026-01-01', '2026-07-01', 'ACT/360'))).toBe(
       '181/360',
     )
-    expect(toFractionString(exactDayCountFraction('2026-01-01', '2026-07-01', '30/360'))).toBe(
+    expect(fractionToString(exactDayCountFraction('2026-01-01', '2026-07-01', '30/360'))).toBe(
       '1/2',
     )
   })
@@ -26,7 +26,7 @@ describe('exact day count fractions', () => {
   it('splits ACT/ACT ISDA at the year boundary and keeps both parts exact', () => {
     // 2023 is a common year, 2024 a leap year: 31/365 + 31/366, not a decimal.
     expect(
-      toFractionString(exactDayCountFraction('2023-12-01', '2024-02-01', 'ACT/ACT ISDA')),
+      fractionToString(exactDayCountFraction('2023-12-01', '2024-02-01', 'ACT/ACT ISDA')),
     ).toBe('22661/133590')
   })
 
@@ -119,7 +119,7 @@ describe('conventions that need extra inputs', () => {
   it('accrues within a coupon period under ACT/ACT ICMA', () => {
     // Half of a semi-annual coupon period is exactly a quarter of a year.
     expect(
-      toFractionString(
+      fractionToString(
         exactDayCountFraction('2026-01-01', '2026-04-01', 'ACT/ACT ICMA', {
           frequency: 'semi-annual',
           referenceStart: '2026-01-01',

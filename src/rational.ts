@@ -37,7 +37,7 @@ export function fraction(numerator: bigint, denominator: bigint): Fraction {
 }
 
 /** The fraction `value / 1`. */
-export const fromInteger = (value: bigint | number): Fraction =>
+export const fractionFromInteger = (value: bigint | number): Fraction =>
   fraction(typeof value === 'bigint' ? value : BigInt(exactInteger(value, 'value')), 1n)
 
 function exactInteger(value: number, name: string): number {
@@ -59,7 +59,7 @@ const DECIMAL_PATTERN = /^([+-]?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/
  * A trailing `%` is read as a percentage: `"5.25%"` is 21/400, exactly the same
  * value as `"0.0525"`.
  */
-export function fromDecimal(input: string): Fraction {
+export function fractionFromDecimal(input: string): Fraction {
   const isPercent = input.endsWith('%')
   const body = isPercent ? input.slice(0, -1).trim() : input.trim()
   const match = DECIMAL_PATTERN.exec(body)
@@ -83,58 +83,58 @@ export function fromDecimal(input: string): Fraction {
  * `0.05` means exactly 5/100 — what you wrote — and not the binary double
  * 0.05000000000000000277… that JavaScript actually stored.
  */
-export function fromNumber(value: number): Fraction {
+export function fractionFromNumber(value: number): Fraction {
   if (!Number.isFinite(value))
     throw new InvalidArgumentError('number', 'must be finite (not NaN or Infinity)')
-  return fromDecimal(value.toString())
+  return fractionFromDecimal(value.toString())
 }
 
 /** Adds two fractions exactly. */
-export const add = (a: Fraction, b: Fraction): Fraction =>
+export const addFractions = (a: Fraction, b: Fraction): Fraction =>
   fraction(a.numerator * b.denominator + b.numerator * a.denominator, a.denominator * b.denominator)
 
 /** Subtracts `b` from `a` exactly. */
-export const subtract = (a: Fraction, b: Fraction): Fraction =>
+export const subtractFractions = (a: Fraction, b: Fraction): Fraction =>
   fraction(a.numerator * b.denominator - b.numerator * a.denominator, a.denominator * b.denominator)
 
 /** Multiplies two fractions exactly. */
-export const multiply = (a: Fraction, b: Fraction): Fraction =>
+export const multiplyFractions = (a: Fraction, b: Fraction): Fraction =>
   fraction(a.numerator * b.numerator, a.denominator * b.denominator)
 
 /** Divides `a` by `b` exactly. Throws if `b` is zero. */
-export function divide(a: Fraction, b: Fraction): Fraction {
+export function divideFractions(a: Fraction, b: Fraction): Fraction {
   if (b.numerator === 0n) throw new InvalidArgumentError('divisor', 'must not be zero')
   return fraction(a.numerator * b.denominator, a.denominator * b.numerator)
 }
 
 /** Negates a fraction. */
-export const negate = (a: Fraction): Fraction => ({
+export const negateFraction = (a: Fraction): Fraction => ({
   numerator: -a.numerator,
   denominator: a.denominator,
 })
 
 /** Orders two fractions: -1 if `a` is smaller, 0 if equal, 1 if larger. */
-export function compare(a: Fraction, b: Fraction): -1 | 0 | 1 {
+export function compareFractions(a: Fraction, b: Fraction): -1 | 0 | 1 {
   const left = a.numerator * b.denominator
   const right = b.numerator * a.denominator
   return left < right ? -1 : left > right ? 1 : 0
 }
 
 /** Returns `true` if the fraction is exactly zero. */
-export const isZero = (a: Fraction): boolean => a.numerator === 0n
+export const isZeroFraction = (a: Fraction): boolean => a.numerator === 0n
 
 /** Raises a fraction to an integer power, exactly. */
-export function power(base: Fraction, exponent: number): Fraction {
+export function raiseFraction(base: Fraction, exponent: number): Fraction {
   if (!Number.isInteger(exponent)) throw new InvalidArgumentError('exponent', 'must be an integer')
   if (exponent === 0) return ONE
-  if (exponent < 0) return divide(ONE, power(base, -exponent))
+  if (exponent < 0) return divideFractions(ONE, raiseFraction(base, -exponent))
   let result = ONE
   let factor = base
   let remaining = exponent
   while (remaining > 0) {
-    if (remaining % 2 === 1) result = multiply(result, factor)
+    if (remaining % 2 === 1) result = multiplyFractions(result, factor)
     remaining = Math.floor(remaining / 2)
-    if (remaining > 0) factor = multiply(factor, factor)
+    if (remaining > 0) factor = multiplyFractions(factor, factor)
   }
   return result
 }
@@ -169,7 +169,7 @@ const PRECISION_BITS = 64
  * large for a double to represent — `(10/3)^400` — and equally for values far
  * too small, where a fixed scale would have quantised the answer to zero.
  */
-export function toNumber(value: Fraction): number {
+export function fractionToNumber(value: Fraction): number {
   if (value.numerator === 0n) return 0
   const negative = value.numerator < 0n
   const magnitude = negative ? -value.numerator : value.numerator
@@ -180,7 +180,7 @@ export function toNumber(value: Fraction): number {
 }
 
 /** Renders a fraction as `numerator/denominator`, or as a bare integer when the denominator is 1. */
-export const toFractionString = (value: Fraction): string =>
+export const fractionToString = (value: Fraction): string =>
   value.denominator === 1n
     ? value.numerator.toString()
     : `${value.numerator.toString()}/${value.denominator.toString()}`
@@ -196,8 +196,8 @@ export type RateInput = number | string | Fraction
 
 /** Normalises any {@link RateInput} to an exact fraction. */
 export function toFraction(value: RateInput, argument = 'rate'): Fraction {
-  if (typeof value === 'number') return fromNumber(value)
-  if (typeof value === 'string') return fromDecimal(value)
+  if (typeof value === 'number') return fractionFromNumber(value)
+  if (typeof value === 'string') return fractionFromDecimal(value)
   if (
     typeof value === 'object' &&
     typeof value.numerator === 'bigint' &&

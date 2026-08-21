@@ -1,5 +1,5 @@
 import { InvalidArgumentError } from './errors.js'
-import { type Fraction, fromInteger, toFraction } from './rational.js'
+import { type Fraction, fractionFromInteger, toFraction } from './rational.js'
 
 const greatestCommonDivisor = (a: bigint, b: bigint): bigint => {
   let x = a < 0n ? -a : a
@@ -124,7 +124,7 @@ export function allocate(amount: bigint, weights: readonly (number | bigint)[]):
   const exact = weights.map((weight, index) => {
     const value =
       typeof weight === 'bigint'
-        ? fromInteger(weight)
+        ? fractionFromInteger(weight)
         : toFraction(weight, `weights[${String(index)}]`)
     if (value.numerator < 0n)
       throw new InvalidArgumentError(`weights[${String(index)}]`, 'must not be negative')

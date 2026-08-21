@@ -4,9 +4,10 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0-beta.1] - 2026-08-21
+## [0.1.0] - 2026-08-21
 
-First public release, published under the `beta` dist-tag while the API settles.
+First release. The public surface is frozen-additive from here — see
+[API-STABILITY.md](API-STABILITY.md).
 
 ### Added
 
@@ -26,7 +27,23 @@ First public release, published under the `beta` dist-tag while the API settles.
 - Typed errors with literal codes: `DateParseError`, `InvalidDateError`,
   `InvalidArgumentError`, `CalendarRangeError`, `ScheduleError`.
 
+### Documentation
+
+- [MIGRATING.md](MIGRATING.md): swaps for `moment-business-days`, `dayjs-business-days2`
+  and `luxon-business-days`, turning an existing holiday list into a calendar, and a
+  `date-holidays` bridge for national holidays in countries this package does not ship.
+- [API-STABILITY.md](API-STABILITY.md): what is frozen, what is not (calendar contents move
+  when a closure is announced), and the questions left open until 1.0.
+
 ### Notes
+
+The exact-arithmetic helpers carry domain names — `addFractions`, `fractionToNumber`,
+`raiseFraction` — rather than the bare `add`, `toNumber` and `power` they were written as.
+A package root is a shared namespace, and freezing `add` into it would have been a
+collision waiting to happen.
+
+`Temporal.PlainDate` is accepted anywhere a date is, with no adapter and no dependency: it
+already carries `year`, `month` and `day`.
 
 Findings from a pre-release review, all fixed before this release and covered by regression
 tests: the fixed-point conversion in `toNumber` quantised very small fractions towards zero;

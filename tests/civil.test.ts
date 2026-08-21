@@ -149,3 +149,21 @@ describe('JavaScript Date conversion', () => {
     expect(() => fromJsDate(new Date('nonsense'), { zone: 'utc' })).toThrow(InvalidDateError)
   })
 })
+
+describe('Temporal interoperability', () => {
+  it('accepts anything shaped like a Temporal.PlainDate', () => {
+    // Temporal.PlainDate exposes year, month and day, which is exactly the
+    // CivilDate shape, so it is accepted with no adapter and no dependency.
+    const plainDateLike = {
+      year: 2026,
+      month: 11,
+      day: 26,
+      calendarId: 'iso8601',
+      dayOfWeek: 4,
+      toString: () => '2026-11-26',
+    }
+    expect(toIsoDate(plainDateLike)).toBe('2026-11-26')
+    expect(dayOfWeek(plainDateLike)).toBe(4)
+    expect(daysBetween(plainDateLike, '2026-11-27')).toBe(1)
+  })
+})

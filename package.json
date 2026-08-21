@@ -47,14 +47,15 @@
     "format:check": "oxfmt --check src tests scripts benchmarks tsdown.config.ts vitest.config.ts",
     "knip": "knip",
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
-    "check:package": "bun run build && bun run scripts/check-package.ts",
+    "check:package": "bun run build && bun run smoke:package",
     "check:release": "bun run check:deps && bun run format:check && bun run lint && bun run knip && bun run typecheck && bun run test:coverage && bun run check:package && bun run test:dist",
     "test:dist": "vitest run --config vitest.dist.config.ts",
     "bench": "vitest bench --run",
     "prepare": "test -n \"$CI\" || lefthook install",
     "prepublishOnly": "bun run check:release",
     "check:deps": "syncpack lint",
-    "attw": "attw"
+    "attw": "attw",
+    "smoke:package": "bun run scripts/check-package.ts"
   },
   "keywords": [
     "business-days",

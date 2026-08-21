@@ -57,11 +57,11 @@ jobs:
             TZ=$tz bun run test
           done
 
-      - name: Suite against the built artifact
-        run: bun run test:dist
-
       - name: Build
         run: bun run build
+
+      - name: Suite against the built artifact
+        run: bun run test:dist
 
 
       - name: Check package exports

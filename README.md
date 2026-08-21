@@ -1,5 +1,14 @@
 # bizdate
 
+[![CI](https://github.com/danfry1/bizdate/actions/workflows/ci.yml/badge.svg)](https://github.com/danfry1/bizdate/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/bizdate/beta.svg)](https://www.npmjs.com/package/bizdate)
+[![zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](https://github.com/danfry1/bizdate/blob/main/package.json)
+[![license](https://img.shields.io/npm/l/bizdate.svg)](https://github.com/danfry1/bizdate/blob/main/LICENSE)
+
+> **Beta.** The API is settled enough to use and to depend on a `0.1.0-beta.x`
+> range, but names may still change before 0.1.0 proper. Feedback from anyone
+> doing this for a living is exactly what this release is for.
+
 Business days, market calendars, day count conventions and interest — for TypeScript.
 Zero dependencies, and checked against QuantLib over 130 years of dates.
 
@@ -30,7 +39,7 @@ settlementDate('2026-11-25', { days: 2, calendar: nyse }) // '2026-11-30' — T+
 ## Install
 
 ```sh
-npm install bizdate      # or: pnpm add bizdate · yarn add bizdate · bun add bizdate
+npm install bizdate@beta   # or: pnpm add · yarn add · bun add — all with @beta
 ```
 
 ```ts

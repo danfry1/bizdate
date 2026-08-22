@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { accrue, accrueExact, amortize, exactLevelPayment } from '../src/accrual.js'
-import { nyse } from '../src/calendars/index.js'
+import {
+  accrue,
+  accrueExact,
+  accruedInterest,
+  amortize,
+  exactLevelPayment,
+  periodContaining,
+} from '../src/accrual.js'
+import { nyse, target } from '../src/calendars/index.js'
 import { InvalidArgumentError } from '../src/errors.js'
-import { fraction, fractionToString, fractionToNumber } from '../src/rational.js'
+import { fraction, fractionToNumber, fractionToString } from '../src/rational.js'
 import { generateSchedule } from '../src/schedule.js'
 
 describe('accrue', () => {
@@ -237,5 +244,95 @@ describe('amortize rounding of the instalment', () => {
     expect(loan.periods.length).toBeLessThan(53)
     expect(loan.periods[loan.periods.length - 1]?.balance).toBe(0n)
     expect(loan.periods.reduce((sum, period) => sum + period.principal, 0n)).toBe(10_003n)
+  })
+})
+
+describe('accruedInterest', () => {
+  const bond = generateSchedule({
+    effective: '2024-05-15',
+    termination: '2029-05-15',
+    frequency: 'semi-annual',
+    calendar: target,
+    convention: 'following',
+  })
+
+  const settle = (settlement: string, dates: 'adjusted' | 'unadjusted' = 'unadjusted') =>
+    accruedInterest({
+      schedule: bond,
+      settlement,
+      notional: 1_000_000_00n,
+      rate: '3.5%',
+      convention: 'ACT/ACT ICMA',
+      dates,
+    })
+
+  it('takes the frequency and reference period from the schedule', () => {
+    const accrued = settle('2026-08-22')
+    expect(accrued.period.unadjustedStart).toBe('2026-05-15')
+    expect(accrued.period.unadjustedEnd).toBe('2026-11-15')
+    expect(accrued.from).toBe('2026-05-15')
+    expect(accrued.days).toBe(99)
+    expect(accrued.fraction).toBeCloseTo(99 / (2 * 184), 15)
+    expect(accrued.amount).toBe(941_576n)
+  })
+
+  it('accrues nothing on a coupon date or at maturity', () => {
+    expect(settle('2026-05-15').amount).toBe(0n)
+    expect(settle('2029-05-15').amount).toBe(0n)
+    expect(settle('2024-05-15').amount).toBe(0n)
+  })
+
+  it('accrues a single day the day after a coupon', () => {
+    const accrued = settle('2026-05-16')
+    expect(accrued.days).toBe(1)
+    expect(accrued.amount).toBe(9_511n)
+  })
+
+  it('gives a different answer on adjusted dates, which is why you must choose', () => {
+    // 15 November 2026 is a Sunday, so the adjusted coupon period runs a day longer.
+    const asWritten = settle('2026-11-14', 'unadjusted')
+    const asTraded = settle('2026-11-14', 'adjusted')
+    expect(asWritten.period.unadjustedEnd).toBe('2026-11-15')
+    expect(asTraded.period.end).toBe('2026-11-16')
+    expect(asWritten.amount).not.toBe(asTraded.amount)
+    expect(asWritten.amount - asTraded.amount).toBe(9_408n)
+  })
+
+  it('refuses a settlement date outside the schedule', () => {
+    expect(() => settle('2024-05-14')).toThrow(/is outside the schedule/)
+    expect(() => settle('2029-05-16')).toThrow(/is outside the schedule/)
+  })
+
+  it('uses the notional reference period for a stub coupon', () => {
+    // A short first coupon: ICMA measures it against the period it would have
+    // been, not against its own length.
+    const stubbed = generateSchedule({
+      effective: '2024-02-29',
+      termination: '2029-02-28',
+      frequency: 'semi-annual',
+      calendar: target,
+    })
+    expect(stubbed.periods[0]?.isStub).toBe(true)
+    const accrued = accruedInterest({
+      schedule: stubbed,
+      settlement: '2024-03-01',
+      notional: 100_00n,
+      rate: 0.04,
+      convention: 'ACT/ACT ICMA',
+      dates: 'unadjusted',
+    })
+    // The stub runs 2024-02-29..2024-08-28 but is measured against the notional
+    // 2024-02-28..2024-08-28 period: one day over 2 x 182, not over the stub's
+    // own length. QuantLib agrees to the digit.
+    expect(accrued.period.unadjustedEnd).toBe('2024-08-28')
+    expect(fractionToNumber(accrued.exact) / 100).toBeCloseTo(0.010989010989015, 12)
+    expect(accrued.fraction).toBeCloseTo(1 / 364, 15)
+  })
+
+  it('finds the period containing a date, or nothing', () => {
+    expect(periodContaining(bond, '2026-08-22')?.unadjustedStart).toBe('2026-05-15')
+    expect(periodContaining(bond, '2026-05-15')?.unadjustedStart).toBe('2026-05-15')
+    expect(periodContaining(bond, '2026-05-14')?.unadjustedStart).toBe('2025-11-15')
+    expect(periodContaining(bond, '2030-01-01')).toBeUndefined()
   })
 })

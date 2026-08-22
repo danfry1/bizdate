@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   accrue,
+  accruedInterest,
   addBusinessDays,
   adjust,
   customCalendar,
@@ -99,6 +100,27 @@ describe('README', () => {
     expect(loan.periods[359]?.balance).toBe(0n)
     expect(loan.periods.reduce((sum, period) => sum + period.principal, 0n)).toBe(250_000_00n)
     expect(allocate(100n, [1, 1, 1])).toStrictEqual([34n, 33n, 33n])
+  })
+
+  it('accrued interest', () => {
+    const bond = generateSchedule({
+      effective: '2024-05-15',
+      termination: '2029-05-15',
+      frequency: 'semi-annual',
+      calendar: target,
+      convention: 'following',
+    })
+    const accrued = accruedInterest({
+      schedule: bond,
+      settlement: '2026-08-22',
+      notional: 1_000_000_00n,
+      rate: '3.5%',
+      convention: 'ACT/ACT ICMA',
+      dates: 'unadjusted',
+    })
+    expect(accrued.amount).toBe(941_576n)
+    expect(accrued.days).toBe(99)
+    expect(accrued.period.unadjustedEnd).toBe('2026-11-15')
   })
 
   it('parsing untrusted input', () => {

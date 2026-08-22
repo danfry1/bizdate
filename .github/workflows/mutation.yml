@@ -1,0 +1,41 @@
+name: Mutation
+
+on:
+  schedule:
+    # Weekly, so a score regression surfaces without adding six minutes to every push.
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  mutation:
+    name: Mutation testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.14
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: 24
+
+      - run: bun install --frozen-lockfile
+
+      # Fails below the "break" threshold in stryker.config.json.
+      - name: Mutation score
+        run: bun run test:mutation
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mutation-report
+          path: reports/mutation/

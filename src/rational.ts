@@ -60,8 +60,10 @@ const DECIMAL_PATTERN = /^([+-]?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/
  * value as `"0.0525"`.
  */
 export function fractionFromDecimal(input: string): Fraction {
-  const isPercent = input.endsWith('%')
-  const body = isPercent ? input.slice(0, -1).trim() : input.trim()
+  // Trim before looking for the sign, so a trailing space does not hide it.
+  const trimmed = input.trim()
+  const isPercent = trimmed.endsWith('%')
+  const body = isPercent ? trimmed.slice(0, -1).trim() : trimmed
   const match = DECIMAL_PATTERN.exec(body)
   if (match === null)
     throw new InvalidArgumentError(
@@ -200,6 +202,7 @@ export function toFraction(value: RateInput, argument = 'rate'): Fraction {
   if (typeof value === 'string') return fractionFromDecimal(value)
   if (
     typeof value === 'object' &&
+    value !== null &&
     typeof value.numerator === 'bigint' &&
     typeof value.denominator === 'bigint'
   )

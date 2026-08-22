@@ -305,3 +305,83 @@ def schedules() -> list:
 
 
 write("quantlib-schedule.json", {"quantlib": ql.__version__, "cases": schedules()})
+
+
+BOND_DAY_COUNTERS = {
+    "ACT/ACT ICMA": ql.ActualActual(ql.ActualActual.ISMA),
+    "ACT/365F": ql.Actual365Fixed(),
+    "ACT/360": ql.Actual360(),
+    "30/360": ql.Thirty360(ql.Thirty360.BondBasis),
+    "30E/360": ql.Thirty360(ql.Thirty360.European),
+}
+
+
+def accrued_interest() -> list:
+    """QuantLib's coupon-level accrual, which is what this package's
+    `accruedInterest` reproduces: schedule -> coupon period -> convention.
+
+    The coupon primitive is the reference rather than `Bond.accruedAmount`,
+    whose answer also depends on settlement-day and event-occurrence
+    conventions (`hasOccurred`, `includeReferenceDateEvents`) that belong to
+    trading a bond rather than to measuring accrual.
+    """
+    rows = []
+    bonds = [
+        ("2024-05-15", "2029-05-15", "semi-annual", 0.035, "unadjusted", "target"),
+        ("2024-05-15", "2029-05-15", "semi-annual", 0.035, "following", "target"),
+        ("2024-01-31", "2027-01-31", "quarterly", 0.0625, "modified-following", "nyse"),
+        ("2024-02-29", "2029-02-28", "semi-annual", 0.04, "unadjusted", "target"),
+        ("2023-11-30", "2026-11-30", "annual", 0.0275, "unadjusted", "nyse"),
+        ("2024-06-15", "2026-12-15", "quarterly", 0.05, "following", "nyse"),
+    ]
+    for effective, termination, freq, rate, conv_name, cal_name in bonds:
+        convention = {
+            "unadjusted": ql.Unadjusted,
+            "following": ql.Following,
+            "modified-following": ql.ModifiedFollowing,
+        }[conv_name]
+        schedule = ql.Schedule(
+            qld(effective),
+            qld(termination),
+            TENORS[freq],
+            CALENDARS[cal_name],
+            convention,
+            convention,
+            ql.DateGeneration.Backward,
+            False,
+        )
+        for counter_name, counter in BOND_DAY_COUNTERS.items():
+            bond = ql.FixedRateBond(0, 100.0, schedule, [rate], counter)
+            for cashflow in bond.cashflows():
+                coupon = ql.as_fixed_rate_coupon(cashflow)
+                if coupon is None:
+                    continue
+                start_date = coupon.accrualStartDate()
+                end_date = coupon.accrualEndDate()
+                span = end_date - start_date
+                # Period start, one day in, a third, the middle, and the last day.
+                offsets = sorted({0, 1, span // 3, span // 2, span - 1})
+                for offset in offsets:
+                    if not 0 <= offset < span:
+                        continue
+                    date = start_date + offset
+                    rows.append(
+                        {
+                            "effective": effective,
+                            "termination": termination,
+                            "frequency": freq,
+                            "convention": conv_name,
+                            "calendar": cal_name,
+                            "rate": rate,
+                            "dayCount": counter_name,
+                            "settlement": d(date),
+                            "periodStart": d(start_date),
+                            "periodEnd": d(end_date),
+                            # Per 100 of face, which is how QuantLib quotes it.
+                            "accrued": coupon.accruedAmount(date),
+                        }
+                    )
+    return rows
+
+
+write("quantlib-accrued.json", {"quantlib": ql.__version__, "cases": accrued_interest()})

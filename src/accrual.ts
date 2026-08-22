@@ -1,10 +1,13 @@
-import type { DateInput } from './civil.js'
+import { addMonths, type DateInput, epochDayOf, type IsoDate, toIsoDate } from './civil.js'
 import {
   type DayCountConventionInput,
+  dayCountDays,
+  dayCountFraction,
   type DayCountOptions,
   exactDayCountFraction,
 } from './daycount.js'
 import { InvalidArgumentError } from './errors.js'
+import { frequencyStep } from './frequency.js'
 import { type Rounding, roundFraction, roundRatio } from './money.js'
 import {
   addFractions,
@@ -19,7 +22,7 @@ import {
   toFraction,
   ZERO,
 } from './rational.js'
-import type { Schedule } from './schedule.js'
+import type { Schedule, SchedulePeriod } from './schedule.js'
 
 /** What to accrue: a notional, a rate, a period, and the convention that measures it. */
 export type AccrualOptions = {
@@ -65,6 +68,174 @@ export function accrueExact(options: AccrualOptions): Fraction {
  */
 export function accrue(options: AccrualOptions): bigint {
   return roundFraction(accrueExact(options), options.rounding ?? 'half-even')
+}
+
+/**
+ * The period of a schedule that contains `date`, or `undefined` if it falls
+ * outside.
+ *
+ * Periods are half-open: a date on a period's end belongs to the period that
+ * starts there, which is what makes accrued interest zero on a coupon date.
+ *
+ * `dates` chooses which boundaries to compare against. Adjusted dates are when
+ * the market is actually open; unadjusted dates are what the contract says. Bond
+ * accrual is conventionally measured on the schedule as written, so a schedule
+ * built `unadjusted` and a lookup on `'unadjusted'` agree with the term sheet.
+ */
+export function periodContaining(
+  schedule: Schedule,
+  date: DateInput,
+  options?: { readonly dates?: 'adjusted' | 'unadjusted' },
+): SchedulePeriod | undefined {
+  const useUnadjusted = options?.dates === 'unadjusted'
+  const day = epochDayOf(date)
+  return schedule.periods.find((period) => {
+    const start = epochDayOf(useUnadjusted ? period.unadjustedStart : period.start)
+    const end = epochDayOf(useUnadjusted ? period.unadjustedEnd : period.end)
+    return start <= day && day < end
+  })
+}
+
+/** What to accrue on a schedule, and up to when. */
+export type AccruedInterestOptions = {
+  /** The instrument's coupon or payment schedule. */
+  readonly schedule: Schedule
+  /** The date interest is measured up to, usually a settlement date. */
+  readonly settlement: DateInput
+  /** The principal, in whole minor units. */
+  readonly notional: bigint
+  /** The annual rate as a decimal fraction of 1: `0.035`, `"0.035"` or `"3.5%"`. */
+  readonly rate: RateInput
+  readonly convention: DayCountConventionInput
+  /**
+   * Which dates interest accrues on — the choice that decides the number, so it
+   * has to be made rather than defaulted.
+   *
+   * A bond's term sheet describes unadjusted coupon dates and moves only the
+   * payment when a date is closed; a swap generally accrues on the adjusted
+   * dates it actually pays on. Picking the wrong one shifts the accrual by a day
+   * or two and still looks plausible.
+   */
+  readonly dates: 'adjusted' | 'unadjusted'
+  /** Defaults to `half-even`. */
+  readonly rounding?: Rounding
+  /**
+   * Extra day count inputs. The frequency and the reference period come from the
+   * schedule, so `ACT/ACT ICMA` needs nothing here.
+   */
+  readonly dayCount?: Omit<DayCountOptions, 'frequency' | 'referenceStart' | 'referenceEnd'>
+}
+
+/** Interest accrued so far in a period, with the working shown. */
+export type AccruedInterest = {
+  /** Accrued interest in whole minor units. */
+  readonly amount: bigint
+  /** The same amount before rounding. */
+  readonly exact: Fraction
+  /** The period the settlement date falls in. */
+  readonly period: SchedulePeriod
+  /** Start of accrual: the period's start, on the dates you chose. */
+  readonly from: string
+  /** Days counted by the convention, which is not always calendar days. */
+  readonly days: number
+  /** The day count fraction of a year those days represent. */
+  readonly fraction: number
+}
+
+/**
+ * Interest accrued on an instrument up to a settlement date.
+ *
+ * This is the calculation behind a bond's dirty price, and the one place where
+ * every part of this package meets: the schedule says which coupon period the
+ * settlement falls in, the convention says how much of a year has passed, and
+ * the money layer rounds it once. `ACT/ACT ICMA` gets its frequency and
+ * reference period from the schedule, which is what it needs and what is easiest
+ * to get wrong by hand.
+ *
+ * Accrued interest is zero on a coupon date — the coupon is paid, and the next
+ * period starts — and zero at maturity.
+ */
+export function accruedInterest(options: AccruedInterestOptions): AccruedInterest {
+  const periods = options.schedule.periods
+  const last = periods[periods.length - 1]
+  if (last === undefined)
+    throw new InvalidArgumentError('schedule', 'has no periods to accrue over')
+  const first = periods[0] ?? last
+  const useUnadjusted = options.dates === 'unadjusted'
+  const settlement = toIsoDate(options.settlement)
+  const period = periodContaining(options.schedule, settlement, { dates: options.dates })
+
+  if (period === undefined) {
+    const maturity = useUnadjusted ? last.unadjustedEnd : last.end
+    // Maturity is the one date outside every half-open period with a meaningful
+    // answer: the final coupon has just been paid, so nothing accrues.
+    if (epochDayOf(settlement) === epochDayOf(maturity))
+      return Object.freeze({
+        amount: 0n,
+        exact: ZERO,
+        period: last,
+        from: maturity,
+        days: 0,
+        fraction: 0,
+      })
+    throw new InvalidArgumentError(
+      'settlement',
+      `${settlement} is outside the schedule, which runs from ${
+        useUnadjusted ? first.unadjustedStart : first.start
+      } to ${maturity}`,
+    )
+  }
+
+  const from = useUnadjusted ? period.unadjustedStart : period.start
+  const to = useUnadjusted ? period.unadjustedEnd : period.end
+  const reference = referencePeriod(options.schedule, period, from, to)
+  const dayCount: DayCountOptions = {
+    ...options.dayCount,
+    frequency: options.schedule.frequency,
+    referenceStart: reference.start,
+    referenceEnd: reference.end,
+  }
+  const exact = accrueExact({
+    notional: options.notional,
+    rate: options.rate,
+    start: from,
+    end: settlement,
+    convention: options.convention,
+    dayCount,
+  })
+  return Object.freeze({
+    amount: roundFraction(exact, options.rounding ?? 'half-even'),
+    exact,
+    period,
+    from,
+    days: dayCountDays(from, settlement, options.convention, dayCount),
+    fraction: dayCountFraction(from, settlement, options.convention, dayCount),
+  })
+}
+
+/**
+ * The reference period an `ACT/ACT ICMA` accrual is measured against.
+ *
+ * For a regular coupon it is the coupon itself. For a stub it is the *notional*
+ * period the coupon would have covered had it been regular — ICMA rule 251 —
+ * measured back from the end of a short first coupon or forward from the start
+ * of a short last one. Using the stub's own dates instead inflates or deflates
+ * the accrual by the ratio of the stub to a full period, which is the mistake
+ * that makes a hand-written version of this function wrong.
+ */
+function referencePeriod(
+  schedule: Schedule,
+  period: SchedulePeriod,
+  from: IsoDate,
+  to: IsoDate,
+): { readonly start: IsoDate; readonly end: IsoDate } {
+  if (!period.isStub) return { start: from, end: to }
+  const step = frequencyStep(schedule.frequency)
+  if (step.unit !== 'months') return { start: from, end: to }
+  const isFirst = period.index === 0
+  return isFirst
+    ? { start: addMonths(to, -step.count), end: to }
+    : { start: from, end: addMonths(from, step.count) }
 }
 
 /** How principal is repaid across the schedule. */

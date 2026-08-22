@@ -202,6 +202,49 @@ amortize({
 })
 ```
 
+### Accrued interest
+
+The calculation behind a bond's dirty price, where every layer meets — the schedule finds
+the coupon period, the convention measures it, the money layer rounds it once:
+
+```ts
+import { accruedInterest, generateSchedule, target } from 'bizdate'
+
+const bond = generateSchedule({
+  effective: '2024-05-15',
+  termination: '2029-05-15',
+  frequency: 'semi-annual',
+  calendar: target,
+  convention: 'following',
+})
+
+const accrued = accruedInterest({
+  schedule: bond,
+  settlement: '2026-08-22',
+  notional: 1_000_000_00n,
+  rate: '3.5%',
+  convention: 'ACT/ACT ICMA',
+  dates: 'unadjusted',
+})
+
+accrued.amount              // 941_576n → 9,415.76
+accrued.days                // 99
+accrued.period.unadjustedEnd // '2026-11-15' — the coupon it belongs to
+```
+
+Three things this does that a hand-written version usually gets wrong:
+
+- **`dates` is required**, because it decides the number. A bond's term sheet describes
+  unadjusted coupon dates and moves only the payment when a date is closed; a swap accrues
+  on the adjusted dates it pays on. Both fields exist on every period, so the wrong one is
+  one keystroke away and produces a plausible answer that is a day or two out.
+- **`ACT/ACT ICMA` gets its frequency and reference period from the schedule**, rather than
+  from you repeating them.
+- **A stub coupon is measured against its notional period**, per ICMA rule 251 — not
+  against its own shorter length, which would inflate the accrual.
+
+All 1,375 of these are checked against QuantLib's own coupon accrual, boundaries included.
+
 Splitting money is covered too: `allocate(100n, [1, 1, 1])` gives `[34n, 33n, 33n]` — the
 total always survives the division.
 
@@ -219,6 +262,7 @@ and compared exactly:
 | BUS/252 | 665 pairs on two calendars |
 | Business-day conventions | 7 conventions × ~3,900 dates × 4 calendars |
 | Schedule generation | 1,144 schedules, date for date |
+| Accrued interest | 1,375 bond coupons: period, day count and amount |
 
 Two places deliberately disagree with QuantLib, both listed in the tests with a reason:
 Martin Luther King Jr. Day, which QuantLib starts in 1983 but which
@@ -249,6 +293,12 @@ Beyond the reference tests: property-based tests (fast-check) pin the invariants
 hold for every input — day count fractions are antisymmetric, an allocation always sums to
 the original total, an amortization always ends at a zero balance — and the whole suite is
 re-run against the built artifact so a packaging mistake cannot pass unnoticed.
+
+Mutation testing puts a number on how much the tests are worth: Stryker rewrites the code
+2,361 different ways and the suite catches **84.6%** of them. Every survivor has been
+reviewed, and what remains is message wording, provably equivalent mutants, and guards on
+states the types already rule out. [ASSURANCE.md](ASSURANCE.md) has the breakdown, the
+methods and — as importantly — what none of them covers.
 
 ## Calendars
 
@@ -294,6 +344,7 @@ unpadded fields, times, and offsets.
 - [DESIGN.md](DESIGN.md) — why the API looks like this: exact arithmetic, no `Date`, where
   `Result` earns its place, and where this package deviates from QuantLib.
 - [API-STABILITY.md](API-STABILITY.md) — what is frozen, what is not, and what is still open.
+- [ASSURANCE.md](ASSURANCE.md) — what is verified, by what method, and what is not covered.
 - [CHANGELOG.md](CHANGELOG.md)
 
 ## License

@@ -109,6 +109,9 @@ export {
 // Money
 export { allocate, type Rounding, roundFraction } from './money.js'
 export {
+  type AccruedInterest,
+  type AccruedInterestOptions,
+  accruedInterest,
   type AccrualOptions,
   accrue,
   accrueExact,
@@ -118,6 +121,7 @@ export {
   type AmortizationPeriod,
   amortize,
   exactLevelPayment,
+  periodContaining,
 } from './accrual.js'
 
 // Exact arithmetic
